@@ -1,0 +1,74 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: [indexer, search-core, backend, crawler, frontend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Rust
+        if: matrix.project == 'indexer' || matrix.project == 'search-core'
+        uses: actions/setup-rust@v1
+        with:
+          rust-version: stable
+
+      - name: Setup Go
+        if: matrix.project == 'backend' || matrix.project == 'crawler'
+        uses: actions/setup-go@v4
+        with:
+          go-version: 1.21
+
+      - name: Setup Node.js
+        if: matrix.project == 'frontend'
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: |
+          cd ${{ matrix.project }}
+          if [[ "${{ matrix.project }}" == "frontend" ]]; then pnpm install; fi
+
+      - name: Build
+        run: |
+          cd ${{ matrix.project }}
+          if [[ "${{ matrix.project }}" == "indexer" || "${{ matrix.project }}" == "search-core" ]]; then cargo build --release; fi
+          if [[ "${{ matrix.project }}" == "backend" || "${{ matrix.project }}" == "crawler" ]]; then go build -o app; fi
+          if [[ "${{ matrix.project }}" == "frontend" ]]; then pnpm build; fi
+
+      - name: Run tests
+        run: |
+          cd ${{ matrix.project }}
+          if [[ "${{ matrix.project }}" == "indexer" || "${{ matrix.project }}" == "search-core" ]]; then cargo test; fi
+          if [[ "${{ matrix.project }}" == "backend" || "${{ matrix.project }}" == "crawler" ]]; then go test ./...; fi
+          if [[ "${{ matrix.project }}" == "frontend" ]]; then pnpm test; fi
+
+      - name: Run analyzers
+        run: |
+          cd ${{ matrix.project }}
+          if [[ "${{ matrix.project }}" == "indexer" || "${{ matrix.project }}" == "search-core" ]]; then
+            cargo clippy --all-targets --all-features -- -D warnings
+            cargo fmt -- --check
+          fi
+          if [[ "${{ matrix.project }}" == "backend" || "${{ matrix.project }}" == "crawler" ]]; then
+            golangci-lint run ./...
+            go fmt -l ./
+          fi
+          if [[ "${{ matrix.project }}" == "frontend" ]]; then
+            pnpm eslint . --max-warnings=0
+            pnpm prettier --check .
+          fi

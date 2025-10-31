@@ -1,0 +1,87 @@
+services:
+  backend:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+      network: host
+    ports:
+      - "8080:8080"
+
+  crawler:
+    build:
+      context: crawler
+      dockerfile: Dockerfile
+      network: host
+    environment:
+      - RUST_LOG=info
+    depends_on:
+      - backend
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+      network: host
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  indexer:
+    build:
+      context: indexer
+      dockerfile: Dockerfile
+      network: host
+    environment:
+      - RUST_LOG=info
+    depends_on:
+      - backend
+
+  search-core:
+    build:
+      context: search-core
+      dockerfile: Dockerfile
+      network: host
+    environment:
+      - RUST_LOG=info
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./db/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"   # AMQP protocol
+      - "15672:15672" # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  redis:
+    image: redis:8
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./db/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+
+volumes:
+  pgdata:
+  rabbitmq_data:
+  redis_data:
