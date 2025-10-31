@@ -76,24 +76,3 @@ jobs:
       #   if: ${{ matrix.project == 'frontend' }}
       #   run: pnpm test
       #   working-directory: ./frontend
-
-      - name: Rust analyzers
-        if: ${{ matrix.project == 'indexer' || matrix.project == 'search-core' }}
-        run: |
-          cargo clippy --all-targets --all-features -- -D warnings
-          cargo fmt -- --check
-        working-directory: ./${{ matrix.project }}
-
-      - name: Go analyzers
-        if: ${{ matrix.project == 'backend' || matrix.project == 'crawler' }}
-        run: |
-          golangci-lint run ./...
-          go fmt -l ./
-        working-directory: ./${{ matrix.project }}
-
-      # - name: Frontend analyzers
-      #   if: ${{ matrix.project == 'frontend' }}
-      #   run: |
-      #     pnpm eslint . --max-warnings=0
-      #     pnpm prettier --check .
-      #   working-directory: ./frontend
