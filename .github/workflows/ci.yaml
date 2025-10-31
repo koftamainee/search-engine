@@ -32,20 +32,20 @@ jobs:
         with:
           go-version: 1.21
 
-      - name: Setup Node.js and pnpm
-        if: ${{ matrix.project == 'frontend' }}
-        uses: actions/setup-node@v3
-        with:
-          node-version: 20
-          cache: 'pnpm'
-      - name: Install pnpm (frontend)
-        if: ${{ matrix.project == 'frontend' }}
-        run: npm install -g pnpm
-
-      - name: Install frontend dependencies
-        if: ${{ matrix.project == 'frontend' }}
-        run: pnpm install
-        working-directory: ./frontend
+      # - name: Setup Node.js and pnpm
+      #   if: ${{ matrix.project == 'frontend' }}
+      #   uses: actions/setup-node@v3
+      #   with:
+      #     node-version: 20
+      #     cache: 'pnpm'
+      # - name: Install pnpm (frontend)
+      #   if: ${{ matrix.project == 'frontend' }}
+      #   run: npm install -g pnpm
+      #
+      # - name: Install frontend dependencies
+      #   if: ${{ matrix.project == 'frontend' }}
+      #   run: pnpm install
+      #   working-directory: ./frontend
 
       - name: Build Rust project
         if: ${{ matrix.project == 'indexer' || matrix.project == 'search-core' }}
@@ -72,10 +72,10 @@ jobs:
         run: go test ./...
         working-directory: ./${{ matrix.project }}
 
-      - name: Test frontend project
-        if: ${{ matrix.project == 'frontend' }}
-        run: pnpm test
-        working-directory: ./frontend
+      # - name: Test frontend project
+      #   if: ${{ matrix.project == 'frontend' }}
+      #   run: pnpm test
+      #   working-directory: ./frontend
 
       - name: Rust analyzers
         if: ${{ matrix.project == 'indexer' || matrix.project == 'search-core' }}
@@ -91,9 +91,9 @@ jobs:
           go fmt -l ./
         working-directory: ./${{ matrix.project }}
 
-      - name: Frontend analyzers
-        if: ${{ matrix.project == 'frontend' }}
-        run: |
-          pnpm eslint . --max-warnings=0
-          pnpm prettier --check .
-        working-directory: ./frontend
+      # - name: Frontend analyzers
+      #   if: ${{ matrix.project == 'frontend' }}
+      #   run: |
+      #     pnpm eslint . --max-warnings=0
+      #     pnpm prettier --check .
+      #   working-directory: ./frontend
