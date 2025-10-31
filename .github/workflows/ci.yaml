@@ -32,7 +32,6 @@ jobs:
         with:
           go-version: 1.21
 
-
       - name: Install pnpm
         if: ${{ matrix.project == 'frontend' }}
         run: npm install -g pnpm
@@ -43,66 +42,46 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
+        working-directory: ${{ matrix.project }}
 
-      - name: Install frontend dependencies
-        if: ${{ matrix.project == 'frontend' }}
+      - name: Install dependencies
         run: |
-          cd ${{ matrix.project }}
-          pnpm install
+          pnpm install || go mod tidy || true
+        working-directory: ${{ matrix.project }}
+        if: ${{ matrix.project == 'frontend' || matrix.project == 'backend' || matrix.project == 'crawler' }}
 
-      - name: Build Rust project
-        if: ${{ matrix.project == 'indexer' || matrix.project == 'search-core' }}
+      - name: Build project
         run: |
-          cd ${{ matrix.project }}
-          cargo build --release
+          if [[ "${{ matrix.project }}" == "frontend" ]]; then
+            pnpm build
+          elif [[ "${{ matrix.project }}" == "indexer" || "${{ matrix.project}}" == "search-core" ]]; then
+            cargo build --release
+          else
+            go build -o app
+          fi
+        working-directory: ${{ matrix.project }}
 
-      - name: Build Go project
-        if: ${{ matrix.project == 'backend' || matrix.project == 'crawler' }}
+      - name: Test project
         run: |
-          cd ${{ matrix.project }}
-          go build -o app
+          if [[ "${{ matrix.project }}" == "frontend" ]]; then
+            pnpm test
+          elif [[ "${{ matrix.project }}" == "indexer" || "${{ matrix.project }}" == "search-core" ]]; then
+            cargo test
+          else
+            go test ./...
+          fi
+        working-directory: ${{ matrix.project }}
 
-      - name: Build frontend project
-        if: ${{ matrix.project == 'frontend' }}
+      - name: Run analyzers
         run: |
-          cd ${{ matrix.project }}
-          pnpm build
-
-      - name: Test Rust project
-        if: ${{ matrix.project == 'indexer' || matrix.project == 'search-core' }}
-        run: |
-          cd ${{ matrix.project }}
-          cargo test
-
-      - name: Test Go project
-        if: ${{ matrix.project == 'backend' || matrix.project == 'crawler' }}
-        run: |
-          cd ${{ matrix.project }}
-          go test ./...
-
-      - name: Test frontend project
-        if: ${{ matrix.project == 'frontend' }}
-        run: |
-          cd ${{ matrix.project }}
-          pnpm test
-
-      - name: Rust analyzers
-        if: ${{ matrix.project == 'indexer' || matrix.project == 'search-core' }}
-        run: |
-          cd ${{ matrix.project }}
-          cargo clippy --all-targets --all-features -- -D warnings
-          cargo fmt -- --check
-
-      - name: Go analyzers
-        if: ${{ matrix.project == 'backend' || matrix.project == 'crawler' }}
-        run: |
-          cd ${{ matrix.project }}
-          golangci-lint run ./...
-          go fmt -l ./
-
-      - name: Frontend analyzers
-        if: ${{ matrix.project == 'frontend' }}
-        run: |
-          cd ${{ matrix.project }}
-          pnpm eslint . --max-warnings=0
-          pnpm prettier --check .
+          if [[ "${{ matrix.project }}" == "frontend" ]]; then
+            pnpm eslint . --max-warnings=0
+            pnpm prettier --check .
+          elif [[ "${{ matrix.project }}" == "indexer" || "${{ matrix.project }}" == "search-core" ]]; then
+            cargo clippy --all-targets --all-features -- -D warnings
+            cargo fmt -- --check
+          else
+            golangci-lint run ./...
+            go fmt -l ./
+          fi
+        working-directory: ${{ matrix.project }}
