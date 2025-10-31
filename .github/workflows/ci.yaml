@@ -39,7 +39,11 @@ jobs:
           node-version: 20
           cache: 'pnpm'
 
-      - name: Install dependencies
+      - name: Install pnpm
+        if: ${{ matrix.project == 'frontend' }}
+        run: npm install -g pnpm
+
+      - name: Install frontend dependencies
         if: ${{ matrix.project == 'frontend' }}
         run: |
           cd ${{ matrix.project }}
