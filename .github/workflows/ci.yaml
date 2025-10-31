@@ -20,55 +20,83 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Setup Rust
-        if: matrix.project == 'indexer' || matrix.project == 'search-core'
+        if: ${{ matrix.project == 'indexer' || matrix.project == 'search-core' }}
         uses: actions/setup-rust@v1
         with:
           rust-version: stable
 
       - name: Setup Go
-        if: matrix.project == 'backend' || matrix.project == 'crawler'
+        if: ${{ matrix.project == 'backend' || matrix.project == 'crawler' }}
         uses: actions/setup-go@v4
         with:
           go-version: 1.21
 
       - name: Setup Node.js
-        if: matrix.project == 'frontend'
+        if: ${{ matrix.project == 'frontend' }}
         uses: actions/setup-node@v3
         with:
           node-version: 20
           cache: 'pnpm'
 
       - name: Install dependencies
+        if: ${{ matrix.project == 'frontend' }}
         run: |
           cd ${{ matrix.project }}
-          if [[ "${{ matrix.project }}" == "frontend" ]]; then pnpm install; fi
+          pnpm install
 
-      - name: Build
+      - name: Build Rust project
+        if: ${{ matrix.project == 'indexer' || matrix.project == 'search-core' }}
         run: |
           cd ${{ matrix.project }}
-          if [[ "${{ matrix.project }}" == "indexer" || "${{ matrix.project }}" == "search-core" ]]; then cargo build --release; fi
-          if [[ "${{ matrix.project }}" == "backend" || "${{ matrix.project }}" == "crawler" ]]; then go build -o app; fi
-          if [[ "${{ matrix.project }}" == "frontend" ]]; then pnpm build; fi
+          cargo build --release
 
-      - name: Run tests
+      - name: Build Go project
+        if: ${{ matrix.project == 'backend' || matrix.project == 'crawler' }}
         run: |
           cd ${{ matrix.project }}
-          if [[ "${{ matrix.project }}" == "indexer" || "${{ matrix.project }}" == "search-core" ]]; then cargo test; fi
-          if [[ "${{ matrix.project }}" == "backend" || "${{ matrix.project }}" == "crawler" ]]; then go test ./...; fi
-          if [[ "${{ matrix.project }}" == "frontend" ]]; then pnpm test; fi
+          go build -o app
 
-      - name: Run analyzers
+      - name: Build frontend project
+        if: ${{ matrix.project == 'frontend' }}
         run: |
           cd ${{ matrix.project }}
-          if [[ "${{ matrix.project }}" == "indexer" || "${{ matrix.project }}" == "search-core" ]]; then
-            cargo clippy --all-targets --all-features -- -D warnings
-            cargo fmt -- --check
-          fi
-          if [[ "${{ matrix.project }}" == "backend" || "${{ matrix.project }}" == "crawler" ]]; then
-            golangci-lint run ./...
-            go fmt -l ./
-          fi
-          if [[ "${{ matrix.project }}" == "frontend" ]]; then
-            pnpm eslint . --max-warnings=0
-            pnpm prettier --check .
-          fi
+          pnpm build
+
+      - name: Test Rust project
+        if: ${{ matrix.project == 'indexer' || matrix.project == 'search-core' }}
+        run: |
+          cd ${{ matrix.project }}
+          cargo test
+
+      - name: Test Go project
+        if: ${{ matrix.project == 'backend' || matrix.project == 'crawler' }}
+        run: |
+          cd ${{ matrix.project }}
+          go test ./...
+
+      - name: Test frontend project
+        if: ${{ matrix.project == 'frontend' }}
+        run: |
+          cd ${{ matrix.project }}
+          pnpm test
+
+      - name: Rust analyzers
+        if: ${{ matrix.project == 'indexer' || matrix.project == 'search-core' }}
+        run: |
+          cd ${{ matrix.project }}
+          cargo clippy --all-targets --all-features -- -D warnings
+          cargo fmt -- --check
+
+      - name: Go analyzers
+        if: ${{ matrix.project == 'backend' || matrix.project == 'crawler' }}
+        run: |
+          cd ${{ matrix.project }}
+          golangci-lint run ./...
+          go fmt -l ./
+
+      - name: Frontend analyzers
+        if: ${{ matrix.project == 'frontend' }}
+        run: |
+          cd ${{ matrix.project }}
+          pnpm eslint . --max-warnings=0
+          pnpm prettier --check .
