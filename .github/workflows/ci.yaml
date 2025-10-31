@@ -21,9 +21,10 @@ jobs:
 
       - name: Setup Rust
         if: ${{ matrix.project == 'indexer' || matrix.project == 'search-core' }}
-        uses: actions/setup-rust@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          rust-version: stable
+          toolchain: stable
+          components: clippy, rustfmt
 
       - name: Setup Go
         if: ${{ matrix.project == 'backend' || matrix.project == 'crawler' }}
