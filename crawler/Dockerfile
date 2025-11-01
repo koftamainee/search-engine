@@ -11,12 +11,8 @@ RUN go build -o /crawler main.go
 
 FROM alpine:latest
 
-RUN addgroup -g 1000 -S crawler && \
-  adduser -u 1000 -S crawler -G crawler
-
 WORKDIR /home/crawler
 
 COPY --from=builder --chown=crawler:crawler /crawler .
 
-USER crawler
 CMD ["./crawler"]

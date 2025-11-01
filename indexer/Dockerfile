@@ -10,10 +10,7 @@ RUN cargo build --release
 
 FROM alpine:latest 
 
-RUN addgroup -g 1000 -S indexer && adduser -u 1000 -S indexer -G indexer
-
 WORKDIR /home/indexer
 COPY --from=builder --chown=indexer:indexer /app/target/release/indexer ./
 
-USER indexer
 CMD ["./indexer"]
