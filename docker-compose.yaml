@@ -3,7 +3,6 @@ services:
     build:
       context: backend
       dockerfile: Dockerfile
-      network: host
     ports:
       - "8080:8080"
 
@@ -11,7 +10,6 @@ services:
     build:
       context: crawler
       dockerfile: Dockerfile
-      network: host
     environment:
       - RUST_LOG=info
     depends_on:
@@ -21,7 +19,6 @@ services:
     build:
       context: frontend
       dockerfile: Dockerfile
-      network: host
     ports:
       - "80:80"
     depends_on:
@@ -31,7 +28,6 @@ services:
     build:
       context: indexer
       dockerfile: Dockerfile
-      network: host
     environment:
       - RUST_LOG=info
     depends_on:
@@ -41,7 +37,6 @@ services:
     build:
       context: search-core
       dockerfile: Dockerfile
-      network: host
     environment:
       - RUST_LOG=info
 
@@ -84,13 +79,12 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
-    network_mode: host
     container_name: prometheus
     restart: unless-stopped
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
     depends_on:
       - backend
       - crawler
@@ -101,7 +95,6 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    network_mode: host
     container_name: grafana
     restart: unless-stopped
     ports:
