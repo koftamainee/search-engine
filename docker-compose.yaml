@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
+    env_file:
+      - .env
 
   crawler:
     build:
@@ -14,6 +16,8 @@ services:
       - RUST_LOG=info
     depends_on:
       - backend
+    env_file:
+      - .env
 
   frontend:
     build:
@@ -23,6 +27,8 @@ services:
       - "80:80"
     depends_on:
       - backend
+    env_file:
+      - .env
 
   indexer:
     build:
@@ -30,8 +36,12 @@ services:
       dockerfile: Dockerfile
     environment:
       - RUST_LOG=info
+    restart: unless-stopped
     depends_on:
-      - backend
+      rabbitmq:
+        condition: service_healthy
+    env_file:
+      - .env
 
   search-core:
     build:
@@ -39,6 +49,8 @@ services:
       dockerfile: Dockerfile
     environment:
       - RUST_LOG=info
+    env_file:
+    - .env
 
   postgres:
     image: postgres:15
@@ -63,6 +75,12 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: user
       RABBITMQ_DEFAULT_PASS: password
+      RABBITMQ_DEFAULT_VHOST: /
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
