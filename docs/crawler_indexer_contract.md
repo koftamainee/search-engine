@@ -93,7 +93,7 @@ Each message represents a single crawled webpage with metadata.
       "required": ["title", "timestamp", "status_code"]
     }
   },
-  "required": ["url", "html", "metadata"]
+  "required": ["url", "text", "metadata"]
 }
 ```
 
