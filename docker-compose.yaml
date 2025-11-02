@@ -7,6 +7,9 @@ services:
       - "8080:8080"
     env_file:
       - .env
+    environment:
+      - POSTGRES_URL=${POSTGRES_BACKEND_URL}
+      - SEARCH_CORE_URL=${SEARCH_CORE_URL}
 
   crawler:
     build:
@@ -14,10 +17,14 @@ services:
       dockerfile: Dockerfile
     environment:
       - RUST_LOG=info
+      - REDIS_URL=${REDIS_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
     depends_on:
       - backend
     env_file:
       - .env
+      - redis
+      - rabbitmq
 
   frontend:
     build:
@@ -25,6 +32,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "80:80"
+    environment:
+      - BACKEND_URL=${BACKEND_URL}
     depends_on:
       - backend
     env_file:
@@ -42,6 +51,11 @@ services:
         condition: service_healthy
     env_file:
       - .env
+      - RABBITMQ_URL=${RABBITMQ_URL}
+    depends_on:
+      - backend
+      - rabbitmq
+      - postgres
 
   search-core:
     build:
@@ -57,9 +71,9 @@ services:
     container_name: postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      POSTGRES_USER: ${POSTGRES_SUPERUSER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_SUPERUSER_DB}
     ports:
       - "5432:5432"
     volumes:
@@ -70,8 +84,8 @@ services:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
-      - "5672:5672"   # AMQP protocol
-      - "15672:15672" # Management UI
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: user
       RABBITMQ_DEFAULT_PASS: password
@@ -81,6 +95,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
@@ -90,10 +106,12 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
       - ./db/redis/redis.conf:/usr/local/etc/redis/redis.conf
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${REDIS_PASSWORD}"]
 
   prometheus:
     image: prom/prometheus:latest
@@ -118,8 +136,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
     volumes:
       - grafana_data:/var/lib/grafana
     depends_on:
@@ -130,7 +148,7 @@ services:
     container_name: postgres-exporter
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: "postgresql://postgres:postgres@postgres:5432/postgres?sslmode=disable"
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_SUPERUSER}:${POSTGRES_SUPERUSER_PASSWORD}@postgres:5432/${POSTGRES_SUPERUSER_DB}?sslmode=disable"
     ports:
       - "9187:9187"
     depends_on:
@@ -142,7 +160,7 @@ services:
     restart: unless-stopped
     ports:
       - "9121:9121"
-    command: ["--redis.addr=redis:6379"]
+    command: ["--redis.addr=${REDIS_URL}"]
     depends_on:
       - redis
 
