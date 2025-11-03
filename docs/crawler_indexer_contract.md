@@ -54,8 +54,8 @@ Each message represents a single crawled webpage with metadata.
 ## **3. Message Handling Rules**
 
 * **Crawler**
-
   * Publishes a message to `crawler_queue` for every successfully crawled page.
+  * **Should open and close queue.** 
   * When the crawler fetches a page, it first checks Redis to see if the URL already exists. **If the URL is present, the crawler skips it; otherwise, it proceeds to fetch the page.**
   * After crawling, the URL is stored in Redis with a time-to-live (TTL) representing the minimum delay before the page can be crawled again.
   * Once the TTL expires and the URL entry is removed from Redis, **the crawler is allowed to fetch that URL again.**
@@ -64,8 +64,8 @@ Each message represents a single crawled webpage with metadata.
   * Ensure `text` is normalized (lowercase, remove html tags, collapse multiple spaces, newlines, etc.)
 
 * **Indexer**
-
   * Consumes messages from `crawler_queue`.
+  * Waits until queue is opened by crawler before commutication
   * Must **acknowledge messages only after successfully storing in the local search DB**.
   * If processing fails, the message should **remain in the queue for retry**.
   * Indexer **should not check** for uniqueness of given URL, it process it in any case.
