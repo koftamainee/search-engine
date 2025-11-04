@@ -1,7 +1,9 @@
 package main
 
-import "log"
+import (
+	"log"
+)
 
 func main() {
-	log.Println("crawler is running")
+	log.Println("crawler is running!")
 }

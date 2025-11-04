@@ -1,0 +1,8 @@
+services:
+  crawler:
+    build:
+      context: crawler
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - ./crawler:/app
