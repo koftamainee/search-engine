@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
       - POSTGRES_URL=${POSTGRES_BACKEND_URL}
       - SEARCH_CORE_URL=${SEARCH_CORE_URL}
@@ -19,6 +21,8 @@ services:
       - RABBITMQ_URL=${RABBITMQ_URL}
     depends_on:
       - backend
+    env_file:
+      - .env
       - redis
       - rabbitmq
 
@@ -32,6 +36,8 @@ services:
       - BACKEND_URL=${BACKEND_URL}
     depends_on:
       - backend
+    env_file:
+      - .env
 
   indexer:
     build:
@@ -39,6 +45,12 @@ services:
       dockerfile: Dockerfile
     environment:
       - RUST_LOG=info
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    env_file:
+      - .env
       - RABBITMQ_URL=${RABBITMQ_URL}
     depends_on:
       - backend
@@ -51,6 +63,8 @@ services:
       dockerfile: Dockerfile
     environment:
       - RUST_LOG=info
+    env_file:
+    - .env
 
   postgres:
     image: postgres:15
@@ -73,6 +87,14 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+      RABBITMQ_DEFAULT_VHOST: /
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
