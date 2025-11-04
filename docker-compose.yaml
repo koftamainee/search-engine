@@ -17,8 +17,6 @@ services:
       - RUST_LOG=info
       - REDIS_URL=${REDIS_URL}
       - RABBITMQ_URL=${RABBITMQ_URL}
-    volumes:
-      - ./crawler:/app
     depends_on:
       - backend
       - redis
