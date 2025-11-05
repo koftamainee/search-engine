@@ -10,7 +10,7 @@ FROM alpine:latest
 
 WORKDIR /home/backend
 
-COPY --from=builder --chown=backend:backend /backend .
+COPY --from=builder /backend .
 
 EXPOSE 8080
 CMD ["./backend"]

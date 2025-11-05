@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [indexer, search-core, backend, crawler] # add frontend
+        project: [search-core, backend, crawler] # add frontend
 
     steps:
       - name: Checkout code

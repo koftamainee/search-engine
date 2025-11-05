@@ -11,6 +11,6 @@ RUN cargo build --release
 FROM alpine:latest 
 
 WORKDIR /home/search-core
-COPY --from=builder --chown=indexer:indexer /app/target/release/search-core ./
+COPY --from=builder /app/target/release/search-core ./
 
 CMD ["./search-core"]
