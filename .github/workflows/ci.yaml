@@ -192,11 +192,11 @@ jobs:
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: |
-            ./backend/Dockerfile
-            ./crawler/Dockerfile
-            ./indexer/Dockerfile
-            ./search-core/Dockerfile
-            ./frontend/Dockerfile
+            backend/Dockerfile
+            crawler/Dockerfile
+            indexer/Dockerfile
+            search-core/Dockerfile
+            frontend/Dockerfile
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
