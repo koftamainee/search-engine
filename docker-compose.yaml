@@ -1,147 +1,43 @@
 services:
   backend:
-    build:
-      context: backend
-      dockerfile: Dockerfile
+    build: ./backend
     ports:
       - "8080:8080"
     environment:
-      - POSTGRES_URL=${POSTGRES_BACKEND_URL}
-      - RUST_LOG=${RUST_LOG}
-
-  crawler:
-    build:
-      context: crawler
-      dockerfile: Dockerfile
-      target: production
-    environment:
-      - RUST_LOG=${RUST_LOG}
-      - REDIS_URL=${REDIS_URL}
-      - RABBITMQ_URL=${RABBITMQ_URL}
-    depends_on:
-      - backend
-      - redis
-      - rabbitmq
-
-  frontend:
-    build:
-      context: frontend
-      dockerfile: Dockerfile
-    ports:
-      - "80:80"
-    environment:
-      - BACKEND_URL=${BACKEND_URL}
-    depends_on:
-      - backend
-
-  search-core:
-    build:
-      context: search-core
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    environment:
-      - RUST_LOG=${RUST_LOG}
-      - RABBITMQ_URL=${RABBITMQ_URL}
-
-  postgres:
-    image: postgres:15
-    container_name: postgres
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=${POSTGRES_SUPERUSER} 
-      - POSTGRES_PASSWORD=${POSTGRES_SUPERUSER_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_SUPERUSER_DB}
-    ports:
-      - "5432:5432"
-    volumes:
-      - ./db/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-      - pgdata:/var/lib/postgresql/data
-
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: rabbitmq
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
-    healthcheck:
-      test: ["CMD", "rabbitmqctl", "status"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-
-  redis:
-    image: redis:7
-    container_name: redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-      - ./db/redis/redis.conf:/usr/local/etc/redis/redis.conf
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${REDIS_PASSWORD}"]
-
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    restart: unless-stopped
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
-    depends_on:
-      - backend
-      - crawler
-      - search-core
-      - postgres-exporter
-      - redis-exporter
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
-    volumes:
-      - grafana_data:/var/lib/grafana
-    depends_on:
-      - prometheus
-
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter
-    container_name: postgres-exporter
-    restart: unless-stopped
-    environment:
-      - DATA_SOURCE_NAME=postgresql://${POSTGRES_SUPERUSER}:${POSTGRES_SUPERUSER_PASSWORD}@postgres:5432/postgres?sslmode=disable
-    ports:
-      - "9187:9187"
+      - POSTGRES_URL=${POSTGRES_URL}
     depends_on:
       - postgres
 
-  redis-exporter:
-    image: oliver006/redis_exporter
-    container_name: redis-exporter
-    restart: unless-stopped
-    ports:
-      - "9121:9121"
+  crawler:
+    build: ./crawler
     environment:
-      - REDIS_ADDR=${REDIS_URL}
+      - REDIS_URL=${REDIS_URL}
     depends_on:
       - redis
 
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
 volumes:
   pgdata:
-  rabbitmq_data:
   redis_data:
-  prometheus_data:
-  grafana_data:
