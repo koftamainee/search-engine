@@ -86,7 +86,6 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
-    environment:
     volumes:
       - redis_data:/data
       - ./db/redis/redis.conf:/usr/local/etc/redis/redis.conf
