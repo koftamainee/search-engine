@@ -68,10 +68,7 @@ services:
       - "15672:15672"
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
-      - RABBITMQ_DEFAULT_PASSWORD=${RABBITMQ_DEFAULT_PASS}
-      - RABBITMQ_DEFAULT_VHOST=/
-    env_file:
-      .env
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
     healthcheck:
       test: ["CMD", "rabbitmqctl", "status"]
       interval: 5s
