@@ -1,5 +1,5 @@
 
-# **Crawler → Indexer RabbitMQ Contract**
+# **Crawler → Search Core RabbitMQ Contract**
 
 ## **1. Queue**
 
@@ -63,12 +63,12 @@ Each message represents a single crawled webpage with metadata.
   * Ensure `url` is normalized (lowercase, remove fragments, etc.).
   * Ensure `text` is normalized (lowercase, remove html tags, collapse multiple spaces, newlines, etc.)
 
-* **Indexer**
+* **Search Core**
   * Consumes messages from `crawler_queue`.
   * Waits until queue is opened by crawler before commutication
   * Must **acknowledge messages only after successfully storing in the local search DB**.
   * If processing fails, the message should **remain in the queue for retry**.
-  * Indexer **should not check** for uniqueness of given URL, it process it in any case.
+  * Search Core **should not check** for uniqueness of given URL, it process it in any case.
 
 ---
 
@@ -119,6 +119,6 @@ Each message represents a single crawled webpage with metadata.
 ```
 
 4. Publishes message to `crawler_queue`.
-5. **Indexer** receives message.
+5. **Search Core** receives message.
 6. Stores data in the local search DB.
 7. Acknowledges RabbitMQ message.

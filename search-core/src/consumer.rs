@@ -76,13 +76,12 @@ pub async fn consume_queue<S: Storage>(
     Ok(())
 }
 
-async fn handle_delivery<S: Storage>(
-    delivery: &Delivery,
+async fn handle_delivery_data<S: Storage>(
+    data: &[u8],
     storage: &mut S,
     schema: &Value,
 ) -> Result<()> {
-    let data_str =
-        std::str::from_utf8(&delivery.data).context("Failed to parse message as UTF-8")?;
+    let data_str = std::str::from_utf8(data).context("Failed to parse message as UTF-8")?;
 
     let instance: Value =
         serde_json::from_str(data_str).context("Failed to parse message as JSON")?;
@@ -100,4 +99,65 @@ async fn handle_delivery<S: Storage>(
     process_message(storage, &message).context("Failed to process message")?;
 
     Ok(())
+}
+
+async fn handle_delivery<S: Storage>(
+    delivery: &Delivery,
+    storage: &mut S,
+    schema: &Value,
+) -> Result<()> {
+    handle_delivery_data(&delivery.data, storage, schema).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::InMemoryStorage;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_handle_delivery_data_valid() {
+        let schema = crawler_message_schema();
+        let mut storage = InMemoryStorage::default();
+
+        let msg = json!({
+            "url": "https://example.com",
+            "text": "Hello test",
+            "metadata": {
+                "title": "Example",
+                "description": "desc",
+                "timestamp": "2025-11-05T00:00:00Z",
+                "status_code": 200
+            }
+        });
+
+        let data = serde_json::to_vec(&msg).unwrap();
+        let result = handle_delivery_data(&data, &mut storage, &schema).await;
+
+        assert!(result.is_ok());
+        assert_eq!(storage.messages.len(), 1);
+        assert_eq!(storage.messages[0].url, "https://example.com");
+    }
+
+    #[tokio::test]
+    async fn test_handle_delivery_data_bad_status() {
+        let schema = crawler_message_schema();
+        let mut storage = InMemoryStorage::default();
+
+        let msg = json!({
+            "url": "https://example.com",
+            "text": "Bad status",
+            "metadata": {
+                "title": "Bad",
+                "description": "desc",
+                "timestamp": "2025-11-05T00:00:00Z",
+                "status_code": 404
+            }
+        });
+
+        let data = serde_json::to_vec(&msg).unwrap();
+        let result = handle_delivery_data(&data, &mut storage, &schema).await;
+
+        assert!(result.is_err());
+    }
 }

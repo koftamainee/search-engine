@@ -1,6 +1,6 @@
 # Search core
 
-Rust service that handles search queries, ranking, and retrieval for indexed data.
+Rust service that indexes data, sets it into database and listens for incoming request to get data from database.
 
 ---
 

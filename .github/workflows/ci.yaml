@@ -16,8 +16,8 @@ env:
   POSTGRES_BACKEND_DB_NAME: accounts_db
   POSTGRES_BACKEND_USER: accounts_user
   POSTGRES_BACKEND_PASSWORD: accounts_password
-  RABBITMQ_USER: user
-  RABBITMQ_PASSWORD: password
+  RABBITMQ_DEFAULT_USER: user
+  RABBITMQ_DEFAULT_PASS: password
   REDIS_PASSWORD: redispassword
   GRAFANA_ADMIN_USER: user
   GRAFANA_ADMIN_PASSWORD: password
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        project: [indexer, search-core, backend, crawler] # add frontend
+        project: [search-core, backend, crawler] # add frontend
 
     steps:
       - name: Checkout code
