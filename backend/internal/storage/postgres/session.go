@@ -21,7 +21,7 @@ func NewSessionStorage(db *pgxpool.Pool) *SessionStorage {
 func (s *SessionStorage) Create(ctx context.Context, session *domain.Session) error {
 	_, err := s.db.Exec(ctx,
 		`INSERT INTO sessions (id, user_id, token, created_at, expires_at)
-			VALUES ($1, $2, $3, $4)`,
+			VALUES ($1, $2, $3, $4, $5)`,
 		session.ID, session.UserID, session.Token, session.CreatedAt, session.ExpiresAt,
 	)
 	return err

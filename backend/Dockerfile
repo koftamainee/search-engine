@@ -12,5 +12,7 @@ WORKDIR /home/backend
 
 COPY --from=builder /backend .
 
+COPY config/ config/
+
 EXPOSE 8080
 CMD ["./backend"]

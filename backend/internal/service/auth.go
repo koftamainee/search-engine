@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -12,9 +14,11 @@ import (
 )
 
 var (
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrUserBanned         = errors.New("user is banned")
-	ErrAlreadyExists      = errors.New("email already taken")
+	ErrInvalidCredentials    = errors.New("invalid credentials")
+	ErrUserBanned            = errors.New("user is banned")
+	ErrAlreadyExists         = errors.New("email already taken")
+	ErrFailedToGenerateToken = errors.New("failed to generate token")
+	ErrNotFound              = errors.New("not found")
 )
 
 const sessionDuration = 7 * 24 * time.Hour
@@ -52,4 +56,89 @@ func (s *AuthService) Register(ctx context.Context, email string, password strin
 	}
 
 	return user, nil
+}
+
+func (s *AuthService) Login(ctx context.Context, email string, password string) (*domain.Session, error) {
+	user, err := s.users.GetByEmail(ctx, email)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return nil, ErrInvalidCredentials
+		}
+		return nil, err
+	}
+
+	if user.IsBanned {
+		return nil, ErrUserBanned
+	}
+
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	token, err := generateToken()
+	if err != nil {
+		return nil, ErrFailedToGenerateToken
+	}
+	session := &domain.Session{
+		ID:        uuid.New(),
+		UserID:    user.ID,
+		Token:     token,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(sessionDuration),
+	}
+
+	err = s.sessions.Create(ctx, session)
+	if err != nil {
+		return nil, err
+	}
+
+	return session, nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, token string) error {
+	err := s.sessions.Delete(ctx, token)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return ErrNotFound
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *AuthService) ValidateToken(ctx context.Context, token string) (*domain.User, error) {
+	session, err := s.sessions.GetByToken(ctx, token)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return nil, ErrInvalidCredentials
+		}
+		return nil, err
+	}
+
+	user, err := s.users.GetByID(ctx, session.UserID)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return nil, ErrInvalidCredentials
+		}
+		return nil, err
+	}
+
+	if user.IsBanned {
+		return nil, ErrUserBanned
+	}
+	if user.DeletedAt != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	return user, nil
+}
+
+func generateToken() (string, error) {
+	bytes := make([]byte, 32)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
 }
