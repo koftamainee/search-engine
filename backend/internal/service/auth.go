@@ -81,14 +81,11 @@ func (s *AuthService) Login(ctx context.Context, email string, password string) 
 		return nil, ErrFailedToGenerateToken
 	}
 	session := &domain.Session{
-		ID:        uuid.New(),
-		UserID:    user.ID,
-		Token:     token,
-		CreatedAt: time.Now(),
-		ExpiresAt: time.Now().Add(sessionDuration),
+		UserID: user.ID,
+		Token:  token,
 	}
 
-	err = s.sessions.Create(ctx, session)
+	err = s.sessions.Create(ctx, session, sessionDuration)
 	if err != nil {
 		return nil, err
 	}

@@ -17,10 +17,17 @@ type Postgres struct {
 	URL string `json:"url"`
 }
 
+type Redis struct {
+	Address  string `json:"address"`
+	Password string `json:"password"`
+	DB       int    `json:"db"`
+}
+
 type Config struct {
 	Env        string     `json:"env"`
 	HTTPServer HTTPServer `json:"http_server"`
 	Postgres   Postgres   `json:"postgres"`
+	Redis      Redis      `json:"redis"`
 }
 
 func MustLoad() *Config {

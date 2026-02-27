@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/koftamainee/search-engine/backend/internal/domain"
@@ -37,7 +38,7 @@ type HistoryStorage interface {
 }
 
 type SessionStorage interface {
-	Create(ctx context.Context, session *domain.Session) error
+	Create(ctx context.Context, session *domain.Session, expiresIn time.Duration) error
 	GetByToken(ctx context.Context, token string) (*domain.Session, error)
 	Delete(ctx context.Context, token string) error
 }

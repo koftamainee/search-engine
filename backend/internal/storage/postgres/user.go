@@ -51,6 +51,9 @@ func (s *UserStorage) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, 
 		}
 		return nil, err
 	}
+	if user.DeletedAt != nil {
+		return nil, storage.ErrDeleted
+	}
 
 	return user, err
 }
@@ -69,6 +72,9 @@ func (s *UserStorage) GetByEmail(ctx context.Context, email string) (*domain.Use
 			return nil, storage.ErrNotFound
 		}
 		return nil, err
+	}
+	if user.DeletedAt != nil {
+		return nil, storage.ErrDeleted
 	}
 
 	return user, err
