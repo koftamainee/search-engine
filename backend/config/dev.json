@@ -1,0 +1,17 @@
+{
+  "env": "docker",
+  "http_server": {
+    "address": "0.0.0.0:8080",
+    "timeout": 10000000000,
+    "idle_timeout": 60000000000
+  },
+  "postgres": {
+    "url": "postgres://user:pass@postgres:5432/userdb"
+  },
+
+  "redis": {
+    "address": "redis-backend:6379",
+    "password": "pass",
+    "DB": 0
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "env": "local",
+  "http_server": {
+    "address": "0.0.0.0:8080",
+    "timeout": 10000000000,
+    "idle_timeout": 60000000000
+  },
+
+  "postgres": {
+    "url": "postgres://postgres:password@localhost:5432/userdb"
+  },
+
+  "redis": {
+    "address": "localhost:6379",
+    "password": "",
+    "DB": 0
+  }
+}
