@@ -47,7 +47,12 @@ func MustLoad() *Config {
 	if err != nil {
 		log.Fatalf("Failed to open config file: %s", configPath)
 	}
-	defer fin.Close()
+	defer func(fin *os.File) {
+		err := fin.Close()
+		if err != nil {
+			log.Printf("Failed to close config file")
+		}
+	}(fin)
 
 	if err := json.NewDecoder(fin).Decode(&cfg); err != nil {
 		log.Fatalf("cannot parse config file: %s", err)

@@ -10,8 +10,8 @@
   },
 
   "redis": {
-    "address": "redis:6379",
-    "password": "",
+    "address": "redis-backend:6379",
+    "password": "pass",
     "DB": 0
   }
 }

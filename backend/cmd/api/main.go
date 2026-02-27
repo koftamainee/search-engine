@@ -10,6 +10,7 @@ import (
 	"github.com/koftamainee/search-engine/backend/internal/service"
 	"github.com/koftamainee/search-engine/backend/internal/storage/postgres"
 	"github.com/koftamainee/search-engine/backend/internal/storage/redis"
+	redis2 "github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -27,7 +28,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to Redis")
 	}
-	defer redisClient.Close()
+	defer func(redisClient *redis2.Client) {
+		err := redisClient.Close()
+		if err != nil {
+			log.Printf("Failed to close redis connection")
+		}
+	}(redisClient)
 
 	userStorage := postgres.NewUserStorage(pool)
 	sessionStorage := redis.NewSessionStorage(redisClient)
