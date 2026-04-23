@@ -58,5 +58,8 @@ func MustLoad() *Config {
 		log.Fatalf("cannot parse config file: %s", err)
 	}
 
+	cfg.Postgres.URL = os.ExpandEnv(cfg.Postgres.URL)
+	cfg.Redis.Password = os.ExpandEnv(cfg.Redis.Password)
+
 	return &cfg
 }
