@@ -29,9 +29,9 @@ func New(authService *service.AuthService) http.Handler {
 	loginFunc := middleware.Chain(login.New(authService), recoverer, requestid, logger, cors)
 	logoutFunc := middleware.Chain(logout.New(authService), recoverer, requestid, logger, cors, auth)
 
-	mux.HandleFunc("POST /api/v1/auth/register", registerFunc)
-	mux.HandleFunc("POST /api/v1/auth/login", loginFunc)
-	mux.HandleFunc("POST /api/v1/auth/logout", logoutFunc)
+	mux.HandleFunc("POST /v1/auth/register", registerFunc)
+	mux.HandleFunc("POST /v1/auth/login", loginFunc)
+	mux.HandleFunc("POST /v1/auth/logout", logoutFunc)
 
 	return mux
 }
