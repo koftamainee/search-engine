@@ -1,22 +1,28 @@
 services:
   backend:
-    build: ./backend
+    image: ghcr.io/${GITHUB_REPOSITORY}/backend:${IMAGE_TAG:-latest}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
-      - CONFIG_PATH=config/dev.json
+      - CONFIG_PATH=config/prod.json
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      redis-backend:
+        condition: service_healthy
 
   crawler:
-    build: ./crawler
-
+    image: ghcr.io/${GITHUB_REPOSITORY}/crawler:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   frontend:
-    build: ./frontend
+    image: ghcr.io/${GITHUB_REPOSITORY}/frontend:${IMAGE_TAG:-latest}
     ports:
-      - "80:80"
+      - "127.0.0.1:3000:80"
     depends_on:
       - backend
 
@@ -30,18 +36,26 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis-backend:
     image: redis:7
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
       - ./db/redis/redis.conf:/usr/local/etc/redis/redis.conf
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-    command: [ "redis-server", "/usr/local/etc/redis/redis.conf" ]
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   pgdata:
