@@ -6,12 +6,11 @@
     "idle_timeout": 60000000000
   },
   "postgres": {
-    "url": "postgres://user:pass@postgres:5432/userdb"
+    "url": "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
   },
-
   "redis": {
     "address": "redis-backend:6379",
-    "password": "pass",
+    "password": "${REDIS_PASSWORD}",
     "DB": 0
   }
 }

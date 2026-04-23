@@ -5,14 +5,12 @@
     "timeout": 10000000000,
     "idle_timeout": 60000000000
   },
-
   "postgres": {
-    "url": "postgres://postgres:password@localhost:5432/userdb"
+    "url": "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
   },
-
   "redis": {
-    "address": "localhost:6379",
-    "password": "",
+    "address": "redis-backend:6379",
+    "password": "${REDIS_PASSWORD}",
     "DB": 0
   }
 }
