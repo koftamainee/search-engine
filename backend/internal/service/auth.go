@@ -21,17 +21,19 @@ var (
 	ErrNotFound              = errors.New("not found")
 )
 
-const sessionDuration = 7 * 24 * time.Hour
+const SessionDuration = 7 * 24 * time.Hour
 
 type AuthService struct {
 	users    storage.UserStorage
 	sessions storage.SessionStorage
+	IsProd   bool
 }
 
-func NewAuthService(users storage.UserStorage, sessions storage.SessionStorage) *AuthService {
+func NewAuthService(users storage.UserStorage, sessions storage.SessionStorage, isProd bool) *AuthService {
 	return &AuthService{
 		users:    users,
 		sessions: sessions,
+		IsProd:   isProd,
 	}
 }
 
@@ -85,7 +87,7 @@ func (s *AuthService) Login(ctx context.Context, email string, password string) 
 		Token:  token,
 	}
 
-	err = s.sessions.Create(ctx, session, sessionDuration)
+	err = s.sessions.Create(ctx, session, SessionDuration)
 	if err != nil {
 		return nil, err
 	}

@@ -6,9 +6,9 @@ import (
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/auth/login"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/auth/logout"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/auth/register"
+	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/me"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/middleware"
 	authmw "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/auth"
-	corsmw "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/cors"
 	loggermw "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/logger"
 	recoverermv "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/recoverer"
 	requestidmw "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/requestid"
@@ -22,16 +22,17 @@ func New(authService *service.AuthService) http.Handler {
 	recoverer := recoverermv.Middleware()
 	requestid := requestidmw.Middleware()
 	logger := loggermw.Middleware()
-	cors := corsmw.Middleware()
 	auth := authmw.Middleware(authService)
 
-	registerFunc := middleware.Chain(register.New(authService), recoverer, requestid, logger, cors)
-	loginFunc := middleware.Chain(login.New(authService), recoverer, requestid, logger, cors)
-	logoutFunc := middleware.Chain(logout.New(authService), recoverer, requestid, logger, cors, auth)
+	registerFunc := middleware.Chain(register.New(authService), recoverer, requestid, logger)
+	loginFunc := middleware.Chain(login.New(authService), recoverer, requestid, logger)
+	logoutFunc := middleware.Chain(logout.New(authService), recoverer, requestid, logger, auth)
+	meFunc := middleware.Chain(me.New(), recoverer, requestid, logger, auth)
 
 	mux.HandleFunc("POST /v1/auth/register", registerFunc)
 	mux.HandleFunc("POST /v1/auth/login", loginFunc)
 	mux.HandleFunc("POST /v1/auth/logout", logoutFunc)
+	mux.HandleFunc("GET /v1/me", meFunc)
 
 	return mux
 }
