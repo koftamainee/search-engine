@@ -38,7 +38,7 @@ func main() {
 	userStorage := postgres.NewUserStorage(pool)
 	sessionStorage := redis.NewSessionStorage(redisClient)
 
-	authService := service.NewAuthService(userStorage, sessionStorage)
+	authService := service.NewAuthService(userStorage, sessionStorage, cfg.Env == "prod")
 
 	r := router.New(authService)
 
