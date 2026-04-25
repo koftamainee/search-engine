@@ -13,6 +13,7 @@ func New() http.HandlerFunc {
 		user, ok := r.Context().Value(auth.UserContextKey).(*domain.User)
 		if !ok {
 			response.Unauthorized(w)
+			return
 		}
 
 		response.OK(w, user)
