@@ -14,16 +14,16 @@ import (
 )
 
 type Metadata struct {
-	title       string
-	description string
-	timestamp   string
-	status_code int
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Timestamp   string `json:"timestamp,omitempty"`
+	Status_code int    `json:"statusCode"`
 }
 
 type CrawlerMessage struct {
-	url  string
-	text string
-	meta Metadata
+	Url  string   `json:"url"`
+	Text string   `json:"text"`
+	Meta Metadata `json:"meta"`
 }
 
 func attrToMap(arr_attr []html.Attribute) map[string]string {
@@ -130,15 +130,17 @@ func extractData(r io.Reader) (CrawlerMessage, []string) {
 			switch tok.Data {
 			case "title":
 				if tokenizer.Next() == html.TextToken {
-					message.meta.title = tokenizer.Token().Data
+					message.Meta.Title = tokenizer.Token().Data
 				}
 
 			case "meta":
 				attr_map := attrToMap(tok.Attr)
 				if valueExistAndEqualKey(attr_map, "property", "og:description") {
-					message.meta.description = attr_map["content"]
+					message.Meta.Description = attr_map["content"]
 				} else if valueExistAndEqualKey(attr_map, "name", "description") && !valueExistAndEqualKey(attr_map, "property", "og:description") {
-					message.meta.description = attr_map["content"]
+					message.Meta.Description = attr_map["content"]
+				} else {
+					message.Meta.Description = ""
 				}
 
 			case "script", "noscript", "style":
@@ -171,8 +173,8 @@ func extractData(r io.Reader) (CrawlerMessage, []string) {
 
 	}
 
-	message.text = normalizeText(res_text.String())
-	message.meta.timestamp = time.Now().UTC().Format(time.RFC3339)
+	message.Text = normalizeText(res_text.String())
+	message.Meta.Timestamp = time.Now().UTC().Format(time.RFC3339)
 	return message, next_links
 }
 
@@ -190,16 +192,16 @@ func fetchPage(pageUrl string) (CrawlerMessage, []string, error) {
 
 	log.Printf("Page returned status code: %d", resp.StatusCode)
 	message := CrawlerMessage{
-		url: pageUrl,
-		meta: Metadata{
-			status_code: resp.StatusCode,
+		Url: pageUrl,
+		Meta: Metadata{
+			Status_code: resp.StatusCode,
 		},
 	}
 	extractedData, next_links := extractData(resp.Body)
-	message.text = extractedData.text
-	message.meta.title = extractedData.meta.title
-	message.meta.description = extractedData.meta.description
-	message.meta.timestamp = extractedData.meta.timestamp
+	message.Text = extractedData.Text
+	message.Meta.Title = extractedData.Meta.Title
+	message.Meta.Description = extractedData.Meta.Description
+	message.Meta.Timestamp = extractedData.Meta.Timestamp
 
 	var validLinks []string
 	isAlreadyAdded := make(map[string]bool)
@@ -230,11 +232,11 @@ func startCrawler(Url string) error {
 				log.Printf("fetch page error: url = %s, err = %v", url, err)
 				continue
 			}
-			fmt.Printf("🌐 URL: %s\n", message.url)
-			fmt.Printf("📝 Title: %s\n", message.meta.title)
-			fmt.Printf("📊 Status: %d\n", message.meta.status_code)
-			fmt.Printf("⏰ Time: %s\n", message.meta.timestamp)
-			fmt.Printf("📄 Text: %s\n", message.text)
+			fmt.Printf("🌐 URL: %s\n", message.Url)
+			fmt.Printf("📝 Title: %s\n", message.Meta.Title)
+			fmt.Printf("📊 Status: %d\n", message.Meta.Status_code)
+			fmt.Printf("⏰ Time: %s\n", message.Meta.Timestamp)
+			fmt.Printf("📄 Text: %s\n", message.Text)
 
 			visited[url] = true
 			for l := 0; l < len(nextLinks); l++ {
