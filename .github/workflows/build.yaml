@@ -62,6 +62,6 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd ~/infra/projects/search-engine/
+            cd /srv/projects/search-engine/
             docker compose pull || exit 1
             docker compose up -d || exit 1
