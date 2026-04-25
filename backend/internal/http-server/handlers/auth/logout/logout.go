@@ -28,6 +28,15 @@ func New(authService *service.AuthService) http.HandlerFunc {
 			return
 		}
 
+		http.SetCookie(w, &http.Cookie{
+			Name:     "access_token",
+			Value:    "",
+			Secure:   authService.IsProd,
+			SameSite: http.SameSiteLaxMode,
+			Path:     "/",
+			MaxAge:   -1,
+		})
+
 		response.OK(w, nil)
 	}
 }

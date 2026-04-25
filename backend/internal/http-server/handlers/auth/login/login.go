@@ -14,9 +14,6 @@ type Request struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
-type Response struct {
-	Token string `json:"token"`
-}
 
 func New(authService *service.AuthService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -48,8 +45,15 @@ func New(authService *service.AuthService) http.HandlerFunc {
 			return
 		}
 
-		response.OK(w, Response{
-			Token: session.Token,
+		http.SetCookie(w, &http.Cookie{
+			Name:     "access_token",
+			Value:    session.Token,
+			Secure:   authService.IsProd,
+			SameSite: http.SameSiteLaxMode,
+			Path:     "/",
+			MaxAge:   int(service.SessionDuration.Seconds()),
 		})
+
+		response.OK(w, nil)
 	}
 }
