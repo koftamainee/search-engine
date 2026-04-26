@@ -1,13 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/html"
@@ -99,6 +103,16 @@ func isValidLink(Url string, link string) (string, bool) {
 	return abs, true
 }
 
+func getDomain(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	host := parsed.Hostname()
+	host = strings.TrimPrefix(host, "www.")
+	return host
+}
+
 func extractData(r io.Reader) (CrawlerMessage, []string) {
 	message := CrawlerMessage{}
 	var next_links []string
@@ -178,14 +192,23 @@ func extractData(r io.Reader) (CrawlerMessage, []string) {
 	return message, next_links
 }
 
-func fetchPage(pageUrl string) (CrawlerMessage, []string, error) {
+func fetchPage(ctx context.Context, pageUrl string) (CrawlerMessage, []string, error) {
+
+	req, err := http.NewRequestWithContext(ctx, "GET", pageUrl, nil)
+	if err != nil {
+		return CrawlerMessage{}, nil, err
+	}
+
+	req.Header.Set("User-Agent", "SearchEngineCrawler/1.0")
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 
-	resp, err := client.Get(pageUrl)
+	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("Error with code%v", err)
+		if ctx.Err() != nil {
+			log.Printf("context canceled request")
+		}
 		return CrawlerMessage{}, nil, err
 	}
 	defer resp.Body.Close()
@@ -204,31 +227,61 @@ func fetchPage(pageUrl string) (CrawlerMessage, []string, error) {
 	message.Meta.Timestamp = extractedData.Meta.Timestamp
 
 	var validLinks []string
+	var externalLinks []string
+	var internalLinks []string
+
 	isAlreadyAdded := make(map[string]bool)
 	isAlreadyAdded[pageUrl] = true
 	for _, link := range next_links {
+
+		select {
+		case <-ctx.Done():
+			return message, validLinks, ctx.Err()
+		default:
+		}
+
 		if normalizedLink, ok := isValidLink(pageUrl, link); ok {
 			if !isAlreadyAdded[normalizedLink] {
-				validLinks = append(validLinks, normalizedLink)
+				if getDomain(link) != getDomain(pageUrl) {
+					externalLinks = append(externalLinks, link)
+				} else {
+					internalLinks = append(internalLinks, link)
+				}
 				isAlreadyAdded[normalizedLink] = true
 			}
 		}
 	}
-	time.Sleep(200 * time.Millisecond)
+	validLinks = append(validLinks, externalLinks...)
+	validLinks = append(validLinks, internalLinks...)
+
+	select {
+	case <-time.After(200 * time.Millisecond):
+	case <-ctx.Done():
+		return message, validLinks, ctx.Err()
+	}
 
 	return message, validLinks, nil
 }
 
-func startCrawler(Url string) error {
+func startCrawler(ctx context.Context, Url string) error {
 	linkQueue := []string{normalizeUrl(Url)}
 	visited := make(map[string]bool)
 
 	for i := 0; i < len(linkQueue); i++ {
+
+		if ctx.Err() != nil {
+			log.Printf("Crawler stopped: %v", ctx.Err())
+			return ctx.Err()
+		}
+
 		url := linkQueue[i]
 
 		if !visited[url] {
-			message, nextLinks, err := fetchPage(url)
+			message, nextLinks, err := fetchPage(ctx, url)
 			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				log.Printf("fetch page error: url = %s, err = %v", url, err)
 				continue
 			}
@@ -252,9 +305,22 @@ func startCrawler(Url string) error {
 }
 
 func main() {
-	log.Println("Crawler is running!")
-	err := startCrawler("https://example.com")
-	if err != nil {
-		log.Printf(" %d", err)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		log.Println("Received interrupt signal. Shutting down...")
+		cancel()
+	}()
+
+	if err := startCrawler(ctx, "https://example.com"); err != nil {
+		if err == context.Canceled {
+			log.Println("Crawler stopped by user")
+		} else {
+			log.Printf("Crawler error: %v", err)
+		}
 	}
 }
