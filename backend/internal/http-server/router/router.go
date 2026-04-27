@@ -3,6 +3,7 @@ package router
 import (
 	"net/http"
 
+	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/auth/health"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/auth/login"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/auth/logout"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/auth/register"
@@ -28,6 +29,9 @@ func New(authService *service.AuthService, searchService *service.SearchService)
 	registerFunc := middleware.Chain(register.New(authService), recoverer, requestid, logger)
 	loginFunc := middleware.Chain(login.New(authService), recoverer, requestid, logger)
 	logoutFunc := middleware.Chain(logout.New(authService), recoverer, requestid, logger, auth)
+
+	healthFunc := middleware.Chain(health.New(), recoverer, requestid, logger)
+
 	meFunc := middleware.Chain(me.New(), recoverer, requestid, logger, auth)
 
 	searchFunc := middleware.Chain(search.New(searchService), recoverer, requestid, logger, auth)
@@ -35,6 +39,8 @@ func New(authService *service.AuthService, searchService *service.SearchService)
 	mux.HandleFunc("POST /v1/auth/register", registerFunc)
 	mux.HandleFunc("POST /v1/auth/login", loginFunc)
 	mux.HandleFunc("POST /v1/auth/logout", logoutFunc)
+
+	mux.HandleFunc("GET /v1/health", healthFunc)
 
 	mux.HandleFunc("GET /v1/me", meFunc)
 

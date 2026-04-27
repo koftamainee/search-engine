@@ -18,6 +18,11 @@ services:
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
 
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,7 +72,7 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     command: [ "redis-server", "/usr/local/etc/redis/redis.conf" ]
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
+      test: [ "CMD-SHELL", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
