@@ -8,14 +8,14 @@ import (
 	"github.com/koftamainee/search-engine/backend/internal/http-server/middleware"
 	"github.com/koftamainee/search-engine/backend/internal/lib/api/response"
 	libtoken "github.com/koftamainee/search-engine/backend/internal/lib/api/token"
-	"github.com/koftamainee/search-engine/backend/internal/service"
+	"github.com/koftamainee/search-engine/backend/internal/service/auth"
 )
 
 type contextKey string
 
 const UserContextKey contextKey = "user"
 
-func Middleware(authService *service.AuthService) middleware.Middleware {
+func Middleware(authService *auth.Service) middleware.Middleware {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			token := libtoken.Extract(r)
@@ -26,7 +26,7 @@ func Middleware(authService *service.AuthService) middleware.Middleware {
 
 			user, err := authService.ValidateToken(r.Context(), token)
 			if err != nil {
-				if errors.Is(err, service.ErrUserBanned) {
+				if errors.Is(err, auth.ErrUserBanned) {
 					response.Forbidden(w)
 					return
 				}

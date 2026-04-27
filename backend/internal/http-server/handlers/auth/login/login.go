@@ -7,7 +7,7 @@ import (
 	"net/http"
 
 	"github.com/koftamainee/search-engine/backend/internal/lib/api/response"
-	"github.com/koftamainee/search-engine/backend/internal/service"
+	"github.com/koftamainee/search-engine/backend/internal/service/auth"
 )
 
 type Request struct {
@@ -15,7 +15,7 @@ type Request struct {
 	Password string `json:"password"`
 }
 
-func New(authService *service.AuthService) http.HandlerFunc {
+func New(authService *auth.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req Request
 
@@ -31,11 +31,11 @@ func New(authService *service.AuthService) http.HandlerFunc {
 
 		session, err := authService.Login(r.Context(), req.Email, req.Password)
 		if err != nil {
-			if errors.Is(err, service.ErrInvalidCredentials) {
+			if errors.Is(err, auth.ErrInvalidCredentials) {
 				response.Unauthorized(w)
 				return
 			}
-			if errors.Is(err, service.ErrUserBanned) {
+			if errors.Is(err, auth.ErrUserBanned) {
 				response.Forbidden(w)
 				return
 			}
@@ -51,7 +51,7 @@ func New(authService *service.AuthService) http.HandlerFunc {
 			Secure:   authService.IsProd,
 			SameSite: http.SameSiteLaxMode,
 			Path:     "/",
-			MaxAge:   int(service.SessionDuration.Seconds()),
+			MaxAge:   int(auth.SessionDuration.Seconds()),
 		})
 
 		response.OK(w, nil)

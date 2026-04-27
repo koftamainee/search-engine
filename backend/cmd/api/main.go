@@ -4,47 +4,109 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/koftamainee/search-engine/backend/internal/config"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/router"
-	"github.com/koftamainee/search-engine/backend/internal/service"
+	"github.com/koftamainee/search-engine/backend/internal/service/auth"
+	"github.com/koftamainee/search-engine/backend/internal/service/search"
 	"github.com/koftamainee/search-engine/backend/internal/storage/postgres"
 	"github.com/koftamainee/search-engine/backend/internal/storage/redis"
-	redis2 "github.com/redis/go-redis/v9"
+	"github.com/meilisearch/meilisearch-go"
+	redissdk "github.com/redis/go-redis/v9"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
 	cfg := config.MustLoad()
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.HTTPServer.Timeout)
+	defer cancel()
 
-	pool, err := postgres.New(ctx, cfg.Postgres.URL)
-	if err != nil {
-		log.Fatalf("Failed to connect to Postgres: %v", err)
-	}
-	defer pool.Close()
+	wg, ctx := errgroup.WithContext(ctx)
 
-	redisClient, err := redis.New(ctx, cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.DB)
+	const connectionAttempts = 5
+
+	var pgPool *pgxpool.Pool
+	wg.Go(func() error {
+		return connect(ctx, connectionAttempts, cfg.HTTPServer.Timeout, func() error {
+			var err error
+			pgPool, err = postgres.New(ctx, cfg.Postgres.URL)
+			return err
+		})
+	})
+	defer pgPool.Close()
+
+	var meiliClient meilisearch.ServiceManager
+	wg.Go(func() error {
+		meiliClient = meilisearch.New(cfg.Meilisearch.URL, meilisearch.WithAPIKey(cfg.Meilisearch.ApiKey))
+
+		return connect(ctx, connectionAttempts, cfg.HTTPServer.Timeout, func() error {
+			_, err := meiliClient.Health()
+			return err
+		})
+	})
+
+	var redisClient *redissdk.Client
+
+	wg.Go(func() error {
+		return connect(ctx, connectionAttempts, cfg.HTTPServer.Timeout, func() error {
+			var err error
+			redisClient, err = redis.New(ctx, cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.DB)
+			return err
+		})
+	})
+
+	err := wg.Wait()
 	if err != nil {
-		log.Fatalf("Failed to connect to Redis")
+		log.Fatalf("initialization failed: %v", err)
 	}
-	defer func(redisClient *redis2.Client) {
+
+	defer pgPool.Close()
+	defer func(redisClient *redissdk.Client) {
 		err := redisClient.Close()
 		if err != nil {
-			log.Printf("Failed to close redis connection")
+			log.Printf("failed to close redis connection")
 		}
 	}(redisClient)
 
-	userStorage := postgres.NewUserStorage(pool)
+	meiliIndex := meiliClient.Index(cfg.Meilisearch.Index)
+
+	userStorage := postgres.NewUserStorage(pgPool)
 	sessionStorage := redis.NewSessionStorage(redisClient)
 
-	authService := service.NewAuthService(userStorage, sessionStorage, cfg.Env == "prod")
+	authService := auth.New(userStorage, sessionStorage, cfg.Env == "prod")
+	searchService := search.New(meiliIndex)
 
-	r := router.New(authService)
+	r := router.New(authService, searchService)
 
 	log.Printf("starting server on %s", cfg.HTTPServer.Address)
 	err = http.ListenAndServe(cfg.HTTPServer.Address, r)
 	if err != nil {
 		log.Fatalf("server error: %v", err)
 	}
+}
+
+func connect(ctx context.Context, attempts int, delay time.Duration, fn func() error) error {
+	var err error
+
+	for i := 0; i < attempts; i++ {
+		err = fn()
+		if err == nil {
+			return nil
+		}
+
+		if i == attempts-1 {
+			break
+		}
+
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	return err
 }

@@ -17,6 +17,12 @@ type Postgres struct {
 	URL string `json:"url"`
 }
 
+type Meilisearch struct {
+	URL    string `json:"url"`
+	ApiKey string `json:"api_key"`
+	Index  string `json:"index"`
+}
+
 type Redis struct {
 	Address  string `json:"address"`
 	Password string `json:"password"`
@@ -24,10 +30,11 @@ type Redis struct {
 }
 
 type Config struct {
-	Env        string     `json:"env"`
-	HTTPServer HTTPServer `json:"http_server"`
-	Postgres   Postgres   `json:"postgres"`
-	Redis      Redis      `json:"redis"`
+	Env         string      `json:"env"`
+	HTTPServer  HTTPServer  `json:"http_server"`
+	Postgres    Postgres    `json:"postgres"`
+	Meilisearch Meilisearch `json:"meilisearch"`
+	Redis       Redis       `json:"redis"`
 }
 
 func MustLoad() *Config {
@@ -60,6 +67,9 @@ func MustLoad() *Config {
 
 	cfg.Postgres.URL = os.ExpandEnv(cfg.Postgres.URL)
 	cfg.Redis.Password = os.ExpandEnv(cfg.Redis.Password)
+
+	cfg.Meilisearch.ApiKey = os.ExpandEnv(cfg.Meilisearch.ApiKey)
+	cfg.Meilisearch.URL = os.ExpandEnv(cfg.Meilisearch.URL)
 
 	return &cfg
 }
