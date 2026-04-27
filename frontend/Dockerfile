@@ -3,19 +3,26 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
+
 COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --frozen-lockfile
 
 COPY . .
+
 RUN pnpm run build
 
 
-FROM nginx:stable-alpine
+FROM node:22-alpine AS runner
 
-RUN rm -rf /usr/share/nginx/html/*
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+WORKDIR /app
 
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+ENV NODE_ENV=production
+
+COPY --from=builder /app/.output ./.output
+COPY --from=builder /app/package.json ./package.json
+
+EXPOSE 3000
+
+CMD ["node", ".output/server/index.mjs"]
