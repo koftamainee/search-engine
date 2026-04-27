@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -29,6 +30,51 @@ type CrawlerMessage struct {
 	Text string   `json:"text"`
 	Meta Metadata `json:"meta"`
 }
+
+type RobotsTxt struct {
+	PageDomain    string
+	DisallowPaths map[string]bool
+}
+
+func isUnwantedURL(rawURL string) bool {
+	unwantedPatterns := []string{
+		"action=edit",
+		"action=history",
+		"action=info",
+		"veaction=edit",
+		"oldid=",
+		"diff=",
+		"printable=yes",
+		"redlink=1",
+		"Служебная:",
+		"Special:",
+		"Справка:",
+		"Help:",
+		"Википедия:",
+		"Wikipedia:",
+		"Портал:",
+		"Portal:",
+		"Шаблон:",
+		"Template:",
+		"Категория:",
+		"Category:",
+		"Файл:",
+		"File:",
+		"Обсуждение:",
+		"Talk:",
+	}
+
+	lowerURL := strings.ToLower(rawURL)
+	for _, pattern := range unwantedPatterns {
+		if strings.Contains(lowerURL, strings.ToLower(pattern)) {
+			return true
+		}
+	}
+	return false
+}
+
+// TODO: make redis cache here
+var RobotsCache = make(map[string]*RobotsTxt)
 
 func attrToMap(arr_attr []html.Attribute) map[string]string {
 	map_attr := make(map[string]string, len(arr_attr))
@@ -72,10 +118,17 @@ func normalizeText(text string) string {
 }
 
 func toAbsolute(base string, rawlink string) string {
+	if strings.HasPrefix(rawlink, "http://") || strings.HasPrefix(rawlink, "https://") {
+		return rawlink
+	}
 
 	baseParsed, err := url.Parse(base)
 	if err != nil {
 		return ""
+	}
+
+	if strings.HasPrefix(rawlink, "/") {
+		return baseParsed.Scheme + "://" + baseParsed.Host + rawlink
 	}
 
 	rawLinkParsed, err := url.Parse(rawlink)
@@ -83,7 +136,8 @@ func toAbsolute(base string, rawlink string) string {
 		return ""
 	}
 
-	return baseParsed.ResolveReference(rawLinkParsed).String()
+	resolved := baseParsed.ResolveReference(rawLinkParsed)
+	return resolved.String()
 }
 
 func isValidLink(Url string, link string) (string, bool) {
@@ -96,9 +150,15 @@ func isValidLink(Url string, link string) (string, bool) {
 
 	abs = normalizeUrl(abs)
 
+	if strings.HasPrefix(link, "javascript:") || strings.HasPrefix(link, "mailto:") || strings.HasPrefix(link, "tel:") {
+		return "", false
+	}
+
 	if !strings.HasPrefix(abs, "http://") && !strings.HasPrefix(abs, "https://") {
 		return "", false
 	}
+
+	isAllowByRobots(link, getDomain(link))
 
 	return abs, true
 }
@@ -111,6 +171,106 @@ func getDomain(rawURL string) string {
 	host := parsed.Hostname()
 	host = strings.TrimPrefix(host, "www.")
 	return host
+}
+
+func fetchRobotsTxt(pageUrl string) (RobotsTxt, error) {
+	parsedURL, err := url.Parse(pageUrl)
+	if err != nil {
+		return RobotsTxt{}, fmt.Errorf("failed to parse URL: %w", err)
+	}
+
+	robotTxtRef := fmt.Sprintf("%s://%s/robots.txt", parsedURL.Scheme, parsedURL.Host)
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.Get(robotTxtRef)
+	if err != nil {
+		return RobotsTxt{}, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return RobotsTxt{}, nil
+	}
+
+	robots := RobotsTxt{
+		PageDomain:    parsedURL.Host,
+		DisallowPaths: make(map[string]bool),
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	isRelevantUserAgent := false
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		lowerLine := strings.ToLower(line)
+
+		if strings.HasPrefix(lowerLine, "user-agent:") {
+			agent := strings.TrimSpace(line[len("user-agent:"):])
+			isRelevantUserAgent = (agent == "*" || agent == "search-engine")
+			continue
+		}
+
+		if !isRelevantUserAgent {
+			continue
+		}
+
+		if strings.HasPrefix(lowerLine, "disallow:") {
+			path := strings.TrimSpace(line[len("disallow:"):])
+			if path != "" {
+				robots.DisallowPaths[path] = true
+			}
+		} else if strings.HasPrefix(lowerLine, "allow:") {
+			path := strings.TrimSpace(line[len("allow:"):])
+			if path != "" {
+				delete(robots.DisallowPaths, path)
+			}
+		} else if strings.HasPrefix(lowerLine, "crawl-delay:") {
+			continue
+		} else if strings.HasPrefix(lowerLine, "sitemap:") {
+			continue
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return RobotsTxt{}, fmt.Errorf("error reading robots.txt: %w", err)
+	}
+
+	RobotsCache[parsedURL.Host] = &robots
+	return robots, nil
+}
+
+func CacheByRobots(PageUrl string) {
+	domain := getDomain(PageUrl)
+	_, ok := RobotsCache[domain]
+	if !ok {
+		fetchRobotsTxt(PageUrl)
+	}
+}
+
+func isAllowByRobots(link, linkDomain string) bool {
+	robots, ok := RobotsCache[linkDomain]
+	if !ok {
+		return true
+	}
+
+	if len(robots.DisallowPaths) == 0 {
+		return true
+	}
+
+	_, ok2 := robots.DisallowPaths[link]
+	if !ok2 {
+		return true
+	}
+
+	return false
 }
 
 func extractData(r io.Reader) (CrawlerMessage, []string) {
@@ -199,7 +359,7 @@ func fetchPage(ctx context.Context, pageUrl string) (CrawlerMessage, []string, e
 		return CrawlerMessage{}, nil, err
 	}
 
-	req.Header.Set("User-Agent", "SearchEngineCrawler/1.0")
+	req.Header.Set("User-Agent", "Skwajer's_SearchEngineCrawler/1.0")
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
@@ -212,6 +372,8 @@ func fetchPage(ctx context.Context, pageUrl string) (CrawlerMessage, []string, e
 		return CrawlerMessage{}, nil, err
 	}
 	defer resp.Body.Close()
+
+	CacheByRobots(pageUrl)
 
 	log.Printf("Page returned status code: %d", resp.StatusCode)
 	message := CrawlerMessage{
@@ -241,11 +403,14 @@ func fetchPage(ctx context.Context, pageUrl string) (CrawlerMessage, []string, e
 		}
 
 		if normalizedLink, ok := isValidLink(pageUrl, link); ok {
+			if isUnwantedURL(normalizedLink) {
+				continue
+			}
 			if !isAlreadyAdded[normalizedLink] {
 				if getDomain(link) != getDomain(pageUrl) {
-					externalLinks = append(externalLinks, link)
+					externalLinks = append(externalLinks, normalizedLink)
 				} else {
-					internalLinks = append(internalLinks, link)
+					internalLinks = append(internalLinks, normalizedLink)
 				}
 				isAlreadyAdded[normalizedLink] = true
 			}
@@ -289,7 +454,7 @@ func startCrawler(ctx context.Context, Url string) error {
 			fmt.Printf("📝 Title: %s\n", message.Meta.Title)
 			fmt.Printf("📊 Status: %d\n", message.Meta.Status_code)
 			fmt.Printf("⏰ Time: %s\n", message.Meta.Timestamp)
-			fmt.Printf("📄 Text: %s\n", message.Text)
+			//fmt.Printf("📄 Text: %s\n", message.Text)
 
 			visited[url] = true
 			for l := 0; l < len(nextLinks); l++ {
@@ -316,7 +481,7 @@ func main() {
 		cancel()
 	}()
 
-	if err := startCrawler(ctx, "https://example.com"); err != nil {
+	if err := startCrawler(ctx, "https://en.wikipedia.org/wiki/Main_Page"); err != nil {
 		if err == context.Canceled {
 			log.Println("Crawler stopped by user")
 		} else {
