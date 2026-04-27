@@ -1,5 +1,6 @@
 services:
   backend:
+    image: ""
     build: ./backend
     ports:
       - "8080"
@@ -7,6 +8,7 @@ services:
       - CONFIG_PATH=config/local.json
 
   crawler:
+    image: ""
     build:
       context: crawler
       dockerfile: Dockerfile
@@ -15,13 +17,14 @@ services:
       - ./crawler:/app
 
   frontend:
+    image: ""
     build: ./frontend
     ports:
       - "80"
 
   redis-backend:
     ports:
-      - "6379:6379"   # for debugging prob
+      - "6379:6379"
 
   reverse_proxy:
     image: nginx:alpine
