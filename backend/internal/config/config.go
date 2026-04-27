@@ -67,6 +67,7 @@ func MustLoad() *Config {
 
 	cfg.Postgres.URL = os.ExpandEnv(cfg.Postgres.URL)
 	cfg.Redis.Password = os.ExpandEnv(cfg.Redis.Password)
+	cfg.Redis.Address = os.ExpandEnv(cfg.Redis.Address)
 
 	cfg.Meilisearch.ApiKey = os.ExpandEnv(cfg.Meilisearch.ApiKey)
 	cfg.Meilisearch.URL = os.ExpandEnv(cfg.Meilisearch.URL)
