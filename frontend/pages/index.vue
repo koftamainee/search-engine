@@ -1,146 +1,90 @@
 <script setup lang="ts">
-const { me, logout } = useAuth()
-
-const user = ref<any>(null)
-const errorMessage = ref("")
-const isLoading = ref(false)
+const { me } = useAuth()
+const router = useRouter()
+const query = ref("")
 
 onMounted(async () => {
   try {
-    const res = await me()
-    user.value = res.data
-  } catch (error: any) {
-    if (error.response?.status === 403) {
-      errorMessage.value = "Your account has been blocked. Please contact support."
-    } else {
-      navigateTo("/login")
-    }
+    await me()
+  } catch {
+    navigateTo("/login")
   }
 })
 
-async function onLogout() {
-  isLoading.value = true
-  try {
-    await logout()
-    navigateTo("/login")
-  } catch (error: any) {
-    errorMessage.value = "Logout error. Please try again."
-  } finally {
-    isLoading.value = false
-  }
-}
-
-function clearError() {
-  errorMessage.value = ""
+function onSearch() {
+  if (!query.value.trim()) return
+  router.push({ path: "/search", query: { q: query.value, num: 10, offset: 0 } })
 }
 </script>
 
 <template>
   <div class="page">
-    <h1>Search engine</h1>
-
-    <div v-if="errorMessage" class="error-message">
-      {{ errorMessage }}
-      <button @click="clearError" class="close-btn">&times;</button>
-    </div>
-
-    <div v-if="user">
-      <div class="user-info">
-        <h3>User Information</h3>
-        <ul>
-          <li><strong>ID:</strong> {{ user.id }}</li>
-          <li><strong>Email:</strong> {{ user.email }}</li>
-          <li><strong>Admin:</strong> {{ user.is_admin }}</li>
-          <li><strong>Banned:</strong> {{ user.is_banned }}</li>
-          <li><strong>Created at:</strong> {{ user.created_at }}</li>
-        </ul>
-      </div>
-      <button @click="onLogout" :disabled="isLoading" class="logout-btn">
-        <svg v-if="isLoading" class="spinner" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" opacity="0.25" />
-          <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" opacity="0.75" />
+    <h1 class="title">Search engine</h1>
+    <div class="search-bar">
+      <input
+        v-model="query"
+        placeholder="Type your search..."
+        @keyup.enter="onSearch"
+      />
+      <button @click="onSearch">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
-        <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-          <polyline points="16 17 21 12 16 7" />
-          <line x1="21" y1="12" x2="9" y2="12" />
-        </svg>
-        {{ isLoading ? "Logging out..." : "Logout" }}
       </button>
     </div>
-
-    <p v-else-if="!errorMessage">Loading...</p>
+    <!-- Here will be search history later -->
   </div>
 </template>
 
 <style scoped>
 .page {
-  text-align: center;
-}
-
-.error-message {
-  background-color: #fee;
-  color: #c33;
-  padding: 10px;
-  border-radius: 4px;
-  margin-bottom: 15px;
-  border: 1px solid #fcc;
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 2rem;
 }
 
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 20px;
-  cursor: pointer;
-  color: #c33;
-  padding: 0 5px;
+.title {
+  font-size: 2.5rem;
   margin: 0;
 }
 
-.close-btn:hover {
-  color: #a00;
-}
-
-.user-info {
-  margin-bottom: 20px;
-  padding: 15px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-}
-
-ul {
-  list-style: none;
-  padding: 0;
-}
-
-li {
-  margin: 8px 0;
-}
-
-.logout-btn {
-  display: inline-flex;
+.search-bar {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  border: 1px solid #ccc;
+  border-radius: 24px;
+  overflow: hidden;
+  width: 100%;
+  max-width: 560px;
+  background: transparent;
+}
+
+.search-bar input {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 12px 16px;
+  font-size: 16px;
+  background: transparent;
+  color: inherit;
+}
+
+.search-bar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
   cursor: pointer;
+  color: inherit;
 }
 
-.logout-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.spinner {
-  width: 16px;
-  height: 16px;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.search-bar button:hover {
+  color: #646cff;
 }
 </style>
