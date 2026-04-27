@@ -10,6 +10,7 @@ import (
 	"github.com/koftamainee/search-engine/backend/internal/service"
 	"github.com/koftamainee/search-engine/backend/internal/storage/postgres"
 	"github.com/koftamainee/search-engine/backend/internal/storage/redis"
+	"github.com/meilisearch/meilisearch-go"
 	redis2 "github.com/redis/go-redis/v9"
 )
 
@@ -23,6 +24,9 @@ func main() {
 		log.Fatalf("Failed to connect to Postgres: %v", err)
 	}
 	defer pool.Close()
+
+	meiliClient := meilisearch.New(cfg.Meilisearch.URL, meilisearch.WithAPIKey(cfg.Meilisearch.ApiKey))
+	meiliIndex := meiliClient.Index(cfg.Meilisearch.Index)
 
 	redisClient, err := redis.New(ctx, cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.DB)
 	if err != nil {
@@ -39,8 +43,9 @@ func main() {
 	sessionStorage := redis.NewSessionStorage(redisClient)
 
 	authService := service.NewAuthService(userStorage, sessionStorage, cfg.Env == "prod")
+	searchService := service.NewSearchService(meiliIndex)
 
-	r := router.New(authService)
+	r := router.New(authService, searchService)
 
 	log.Printf("starting server on %s", cfg.HTTPServer.Address)
 	err = http.ListenAndServe(cfg.HTTPServer.Address, r)

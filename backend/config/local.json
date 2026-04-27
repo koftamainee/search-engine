@@ -8,6 +8,11 @@
   "postgres": {
     "url": "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
   },
+  "meilisearch": {
+    "url": "http://${MEILI_HOST}:${MEILI_PORT}",
+    "api_key": "${MEILI_MASTER_KEY}",
+    "index": "pages"
+  },
   "redis": {
     "address": "redis-backend:6379",
     "password": "${REDIS_PASSWORD}",
