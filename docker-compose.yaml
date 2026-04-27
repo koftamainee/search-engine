@@ -45,6 +45,11 @@ services:
       - "127.0.0.1:8084:80"
     depends_on:
       - backend
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://localhost/ > /dev/null || exit 1" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
   postgres:
     image: postgres:15
