@@ -14,7 +14,7 @@ import (
 	"github.com/koftamainee/search-engine/backend/internal/storage/postgres"
 	"github.com/koftamainee/search-engine/backend/internal/storage/redis"
 	"github.com/meilisearch/meilisearch-go"
-	redis2 "github.com/redis/go-redis/v9"
+	redissdk "github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -48,7 +48,7 @@ func main() {
 		})
 	})
 
-	var redisClient *redis2.Client
+	var redisClient *redissdk.Client
 
 	wg.Go(func() error {
 		return connect(ctx, connectionAttempts, cfg.HTTPServer.Timeout, func() error {
@@ -64,7 +64,7 @@ func main() {
 	}
 
 	defer pgPool.Close()
-	defer func(redisClient *redis2.Client) {
+	defer func(redisClient *redissdk.Client) {
 		err := redisClient.Close()
 		if err != nil {
 			log.Printf("failed to close redis connection")
