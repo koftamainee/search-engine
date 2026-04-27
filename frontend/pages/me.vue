@@ -36,44 +36,80 @@ function clearError() {
 </script>
 
 <template>
-  <div class="page">
-    <h1>Profile</h1>
+  <div class="wrapper">
+    <NuxtLink to="/" class="home-icon" aria-label="Home">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        <polyline points="9 22 9 12 15 12 15 22" />
+      </svg>
+    </NuxtLink>
 
-    <div v-if="errorMessage" class="error-message">
-      {{ errorMessage }}
-      <button @click="clearError" class="close-btn">&times;</button>
-    </div>
+    <div class="page">
+      <h1>Profile</h1>
 
-    <div v-if="user">
-      <div class="user-info">
-        <h3>User Information</h3>
-        <ul>
-          <li><strong>ID:</strong> {{ user.id }}</li>
-          <li><strong>Email:</strong> {{ user.email }}</li>
-          <li><strong>Admin:</strong> {{ user.is_admin }}</li>
-          <li><strong>Banned:</strong> {{ user.is_banned }}</li>
-          <li><strong>Created at:</strong> {{ user.created_at }}</li>
-        </ul>
+      <div v-if="errorMessage" class="error-message">
+        {{ errorMessage }}
+        <button @click="clearError" class="close-btn">&times;</button>
       </div>
-      <button @click="onLogout" :disabled="isLoading" class="logout-btn">
-        <svg v-if="isLoading" class="spinner" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" opacity="0.25" />
-          <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" opacity="0.75" />
-        </svg>
-        <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-          <polyline points="16 17 21 12 16 7" />
-          <line x1="21" y1="12" x2="9" y2="12" />
-        </svg>
-        {{ isLoading ? "Logging out..." : "Logout" }}
-      </button>
-    </div>
 
-    <p v-else-if="!errorMessage">Loading...</p>
+      <div v-if="user">
+        <div class="user-info">
+          <h3>User Information</h3>
+          <ul>
+            <li><strong>ID:</strong> {{ user.id }}</li>
+            <li><strong>Email:</strong> {{ user.email }}</li>
+            <li><strong>Admin:</strong> {{ user.is_admin }}</li>
+            <li><strong>Banned:</strong> {{ user.is_banned }}</li>
+            <li><strong>Created at:</strong> {{ user.created_at }}</li>
+          </ul>
+        </div>
+        <button @click="onLogout" :disabled="isLoading" class="logout-btn">
+          <svg v-if="isLoading" class="spinner" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" opacity="0.25" />
+            <path d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" fill="currentColor" opacity="0.75" />
+          </svg>
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+          {{ isLoading ? "Logging out..." : "Logout" }}
+        </button>
+      </div>
+
+      <p v-else-if="!errorMessage">Loading...</p>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.wrapper {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.home-icon {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  color: inherit;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.home-icon:hover {
+  background-color: rgba(128, 128, 128, 0.2);
+}
+
 .page {
   text-align: center;
   max-width: 500px;

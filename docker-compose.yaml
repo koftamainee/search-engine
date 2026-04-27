@@ -46,10 +46,10 @@ services:
     depends_on:
       - backend
     healthcheck:
-      test: [ "CMD-SHELL", "curl -fsS http://localhost/ > /dev/null || exit 1" ]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ > /dev/null || exit 1"]
       interval: 10s
-      timeout: 3s
-      retries: 3
+      timeout: 5s
+      retries: 5
 
   postgres:
     image: postgres:15

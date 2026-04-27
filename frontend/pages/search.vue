@@ -41,15 +41,21 @@ async function performSearch() {
   isLoading.value = true
   errorMessage.value = ""
   try {
-    // Используем $fetch к внутреннему API
-    const data = await $fetch("/api/v1/search", {
+    const data = await $fetch<{
+      query: string
+      hits: { id: string; score: number; data: any }[]
+      num: number
+      total: number
+      start: number
+      next_start?: number
+    }>("/api/v1/search", {
       params: {
         q: query.value,
         num,
         offset: offset.value,
       },
     })
-    results.value = data.results || []
+    results.value = data.hits || []
     total.value = data.total || 0
   } catch (e: any) {
     errorMessage.value = "Search failed. Please try again."
@@ -77,54 +83,89 @@ function nextPage() {
 </script>
 
 <template>
-  <div class="search-page">
-    <div class="search-header">
-      <h1 class="site-title">
-        <NuxtLink to="/">Search engine</NuxtLink>
-      </h1>
-      <div class="search-bar">
-        <input
-          v-model="query"
-          placeholder="Search..."
-          @keyup.enter="newSearch"
-        />
-        <button @click="newSearch">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-        </button>
+  <div class="wrapper">
+    <NuxtLink to="/me" class="profile-icon" aria-label="Profile">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+    </NuxtLink>
+
+    <div class="search-page">
+      <div class="search-header">
+        <h1 class="site-title">
+          <NuxtLink to="/">Search engine</NuxtLink>
+        </h1>
+        <div class="search-bar">
+          <input
+            v-model="query"
+            placeholder="Search..."
+            @keyup.enter="newSearch"
+          />
+          <button @click="newSearch">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </button>
+        </div>
       </div>
-    </div>
 
-    <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+      <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
 
-    <div v-if="isLoading" class="loading">Loading results...</div>
+      <div v-if="isLoading" class="loading">Loading results...</div>
 
-    <div v-else-if="results.length" class="results">
-      <p class="count">About {{ total }} results (showing {{ offset + 1 }}–{{ Math.min(offset + num, total) }})</p>
-      <ul>
-        <li v-for="item in results" :key="item.url" class="result-item">
-          <a :href="item.url" target="_blank" class="title">{{ item.title }}</a>
-          <cite class="url">{{ item.url }}</cite>
-          <p class="snippet">{{ item.snippet }}</p>
-        </li>
-      </ul>
-      <div class="pagination">
-        <button :disabled="offset === 0" @click="prevPage">← Previous</button>
-        <button :disabled="offset + num >= total" @click="nextPage">Next →</button>
+      <div v-else-if="results.length" class="results">
+        <p class="count">About {{ total }} results (showing {{ offset + 1 }}–{{ Math.min(offset + num, total) }})</p>
+        <ul>
+          <li v-for="item in results" :key="item.id" class="result-item">
+            <a :href="item.data.url" target="_blank" class="title">{{ item.data.title }}</a>
+            <cite class="url">{{ item.data.url }}</cite>
+            <p class="snippet">{{ item.data.snippet }}</p>
+          </li>
+        </ul>
+        <div class="pagination">
+          <button :disabled="offset === 0" @click="prevPage">← Previous</button>
+          <button :disabled="offset + num >= total" @click="nextPage">Next →</button>
+        </div>
       </div>
-    </div>
 
-    <p v-else-if="!isLoading && searchQuery" class="no-results">No results found for "{{ searchQuery }}"</p>
+      <p v-else-if="!isLoading && searchQuery" class="no-results">No results found for "{{ searchQuery }}"</p>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.wrapper {
+  position: relative;
+  min-height: 100vh;
+  padding-top: 80px;
+}
+
+.profile-icon {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  color: inherit;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+  z-index: 10;
+}
+
+.profile-icon:hover {
+  background-color: rgba(128, 128, 128, 0.2);
+}
+
 .search-page {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 0 1.5rem 2rem;
 }
 
 .search-header {
@@ -132,14 +173,15 @@ function nextPage() {
   align-items: center;
   gap: 1rem;
   margin-bottom: 2rem;
-  border-bottom: 1px solid #eee;
   padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
 }
 
 .site-title {
   font-size: 1.5rem;
   margin: 0;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .site-title a {
@@ -147,12 +189,21 @@ function nextPage() {
   text-decoration: none;
 }
 
+.site-title a:hover {
+  color: #646cff;
+}
+
 .search-bar {
   display: flex;
   flex: 1;
-  border: 1px solid #ccc;
+  border: 1px solid rgba(128, 128, 128, 0.3);
   border-radius: 24px;
   overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.search-bar:focus-within {
+  border-color: #646cff;
 }
 
 .search-bar input {
@@ -174,40 +225,50 @@ function nextPage() {
   background: transparent;
   cursor: pointer;
   color: inherit;
+  transition: color 0.2s;
+}
+
+.search-bar button:hover {
+  color: #646cff;
 }
 
 .error {
   color: #c33;
   background: #fee;
-  padding: 8px;
-  border-radius: 4px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
 }
 
 .loading {
   text-align: center;
-  padding: 2rem;
+  padding: 3rem 0;
+  color: #888;
 }
 
 .count {
-  color: #666;
+  color: #888;
   font-size: 14px;
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .results ul {
   list-style: none;
   padding: 0;
+  margin: 0;
 }
 
 .result-item {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.8rem;
 }
 
 .title {
   font-size: 18px;
-  color: #1a0dab;
+  color: #646cff;
   text-decoration: none;
   font-weight: 500;
+  display: inline-block;
+  margin-bottom: 2px;
 }
 
 .title:hover {
@@ -217,37 +278,42 @@ function nextPage() {
 .url {
   display: block;
   font-style: normal;
-  color: #006621;
-  font-size: 14px;
-  margin-bottom: 4px;
+  color: #4a9e5c;
+  font-size: 13px;
+  margin-bottom: 6px;
+  word-break: break-all;
 }
 
 .snippet {
-  color: #545454;
+  color: #999;
   margin: 0;
   font-size: 14px;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .pagination {
   display: flex;
-  justify-content: space-between;
-  margin-top: 2rem;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2.5rem;
 }
 
 .pagination button {
-  padding: 8px 16px;
+  padding: 10px 20px;
   cursor: pointer;
+  border-radius: 8px;
+  font-size: 14px;
 }
 
 .pagination button:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .no-results {
   text-align: center;
-  padding: 2rem;
-  color: #666;
+  padding: 3rem 0;
+  color: #888;
+  font-size: 15px;
 }
 </style>
