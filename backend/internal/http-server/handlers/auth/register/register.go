@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/koftamainee/search-engine/backend/internal/lib/api/response"
-	"github.com/koftamainee/search-engine/backend/internal/service"
+	auth "github.com/koftamainee/search-engine/backend/internal/service/auth"
 )
 
 type Request struct {
@@ -20,7 +20,7 @@ type Response struct {
 	Email string    `json:"email"`
 }
 
-func New(authService *service.AuthService) http.HandlerFunc {
+func New(authService *auth.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req Request
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -35,7 +35,7 @@ func New(authService *service.AuthService) http.HandlerFunc {
 
 		user, err := authService.Register(r.Context(), req.Email, req.Password)
 		if err != nil {
-			if errors.Is(err, service.ErrAlreadyExists) {
+			if errors.Is(err, auth.ErrAlreadyExists) {
 				response.BadRequest(w, "user with this email already exists")
 				return
 			}

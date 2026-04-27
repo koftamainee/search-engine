@@ -6,10 +6,10 @@ import (
 
 	"github.com/koftamainee/search-engine/backend/internal/lib/api/response"
 	libtoken "github.com/koftamainee/search-engine/backend/internal/lib/api/token"
-	"github.com/koftamainee/search-engine/backend/internal/service"
+	"github.com/koftamainee/search-engine/backend/internal/service/auth"
 )
 
-func New(authService *service.AuthService) http.HandlerFunc {
+func New(authService *auth.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := libtoken.Extract(r)
 
@@ -20,7 +20,7 @@ func New(authService *service.AuthService) http.HandlerFunc {
 
 		err := authService.Logout(r.Context(), token)
 		if err != nil {
-			if errors.Is(err, service.ErrNotFound) {
+			if errors.Is(err, auth.ErrNotFound) {
 				response.Unauthorized(w)
 				return
 			}

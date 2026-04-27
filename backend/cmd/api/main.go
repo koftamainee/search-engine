@@ -7,7 +7,8 @@ import (
 
 	"github.com/koftamainee/search-engine/backend/internal/config"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/router"
-	"github.com/koftamainee/search-engine/backend/internal/service"
+	"github.com/koftamainee/search-engine/backend/internal/service/auth"
+	"github.com/koftamainee/search-engine/backend/internal/service/search"
 	"github.com/koftamainee/search-engine/backend/internal/storage/postgres"
 	"github.com/koftamainee/search-engine/backend/internal/storage/redis"
 	"github.com/meilisearch/meilisearch-go"
@@ -42,8 +43,8 @@ func main() {
 	userStorage := postgres.NewUserStorage(pool)
 	sessionStorage := redis.NewSessionStorage(redisClient)
 
-	authService := service.NewAuthService(userStorage, sessionStorage, cfg.Env == "prod")
-	searchService := service.NewSearchService(meiliIndex)
+	authService := auth.New(userStorage, sessionStorage, cfg.Env == "prod")
+	searchService := search.New(meiliIndex)
 
 	r := router.New(authService, searchService)
 

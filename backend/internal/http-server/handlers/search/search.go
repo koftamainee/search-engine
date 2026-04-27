@@ -7,10 +7,10 @@ import (
 
 	"github.com/koftamainee/search-engine/backend/internal/domain"
 	"github.com/koftamainee/search-engine/backend/internal/lib/api/response"
-	"github.com/koftamainee/search-engine/backend/internal/service"
+	"github.com/koftamainee/search-engine/backend/internal/service/search"
 )
 
-func New(searchService *service.SearchService) http.HandlerFunc {
+func New(searchService *search.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -39,16 +39,13 @@ func New(searchService *service.SearchService) http.HandlerFunc {
 		res, err := searchService.Search(ctx, req)
 		if err != nil {
 			switch {
-			case errors.Is(err, service.ErrEmptyQuery):
+			case errors.Is(err, search.ErrEmptyQuery):
 				response.BadRequest(w, "empty query")
-
-			case errors.Is(err, service.ErrInvalidLimit):
+			case errors.Is(err, search.ErrInvalidLimit):
 				response.BadRequest(w, "invalid limit")
-
-			case errors.Is(err, service.ErrInvalidOffset):
+			case errors.Is(err, search.ErrInvalidOffset):
 				response.BadRequest(w, "invalid offset")
-
-			case errors.Is(err, service.ErrSearchFailed):
+			case errors.Is(err, search.ErrSearchFailed):
 				response.Internal(w)
 
 			default:

@@ -1,4 +1,4 @@
-package service
+package search
 
 import (
 	"context"
@@ -16,15 +16,15 @@ var (
 	ErrSearchFailed  = errors.New("search failed")
 )
 
-type SearchService struct {
+type Service struct {
 	index meilisearch.IndexManager
 }
 
-func NewSearchService(index meilisearch.IndexManager) *SearchService {
-	return &SearchService{index: index}
+func New(index meilisearch.IndexManager) *Service {
+	return &Service{index: index}
 }
 
-func (s *SearchService) Search(ctx context.Context, request domain.SearchRequest) (domain.SearchResponse, error) {
+func (s *Service) Search(ctx context.Context, request domain.SearchRequest) (domain.SearchResponse, error) {
 	var result domain.SearchResponse
 
 	if len(request.Query) == 0 {

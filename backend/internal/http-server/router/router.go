@@ -14,10 +14,11 @@ import (
 	loggermw "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/logger"
 	recoverermv "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/recoverer"
 	requestidmw "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/requestid"
-	"github.com/koftamainee/search-engine/backend/internal/service"
+	authService "github.com/koftamainee/search-engine/backend/internal/service/auth"
+	searchService "github.com/koftamainee/search-engine/backend/internal/service/search"
 )
 
-func New(authService *service.AuthService, searchService *service.SearchService) http.Handler {
+func New(authService *authService.Service, searchService *searchService.Service) http.Handler {
 
 	mux := http.NewServeMux()
 

@@ -1,4 +1,4 @@
-package service
+package auth
 
 import (
 	"context"
@@ -23,21 +23,21 @@ var (
 
 const SessionDuration = 7 * 24 * time.Hour
 
-type AuthService struct {
+type Service struct {
 	users    storage.UserStorage
 	sessions storage.SessionStorage
 	IsProd   bool
 }
 
-func NewAuthService(users storage.UserStorage, sessions storage.SessionStorage, isProd bool) *AuthService {
-	return &AuthService{
+func New(users storage.UserStorage, sessions storage.SessionStorage, isProd bool) *Service {
+	return &Service{
 		users:    users,
 		sessions: sessions,
 		IsProd:   isProd,
 	}
 }
 
-func (s *AuthService) Register(ctx context.Context, email string, password string) (*domain.User, error) {
+func (s *Service) Register(ctx context.Context, email string, password string) (*domain.User, error) {
 
 	hashedPass, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -60,7 +60,7 @@ func (s *AuthService) Register(ctx context.Context, email string, password strin
 	return user, nil
 }
 
-func (s *AuthService) Login(ctx context.Context, email string, password string) (*domain.Session, error) {
+func (s *Service) Login(ctx context.Context, email string, password string) (*domain.Session, error) {
 	user, err := s.users.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -95,7 +95,7 @@ func (s *AuthService) Login(ctx context.Context, email string, password string) 
 	return session, nil
 }
 
-func (s *AuthService) Logout(ctx context.Context, token string) error {
+func (s *Service) Logout(ctx context.Context, token string) error {
 	err := s.sessions.Delete(ctx, token)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -106,7 +106,7 @@ func (s *AuthService) Logout(ctx context.Context, token string) error {
 	return nil
 }
 
-func (s *AuthService) ValidateToken(ctx context.Context, token string) (*domain.User, error) {
+func (s *Service) ValidateToken(ctx context.Context, token string) (*domain.User, error) {
 	session, err := s.sessions.GetByToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
