@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/go-redis/redis"
 	"io"
 	"log"
 	"net/http"
@@ -496,6 +497,20 @@ func main() {
 		log.Println("Received interrupt signal. Shutting down...")
 		cancel()
 	}()
+
+	//redis initialization
+	client := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "!$bibleTumbSha256$!",
+		DB:       0,
+	})
+
+	err := client.Ping().Err()
+	if err != nil {
+		fmt.Println("Redis is not working:", err)
+		return
+	}
+	fmt.Println("Redis is working.")
 
 	if err := startCrawler(ctx, "https://en.wikipedia.org/wiki/Main_Page"); err != nil {
 		if err == context.Canceled {
