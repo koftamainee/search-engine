@@ -499,9 +499,14 @@ func main() {
 	}()
 
 	//redis initialization
+	host := os.Getenv("REDIS_CRAWLER_HOST")
+	port := os.Getenv("REDIS_PORT")
+	password := os.Getenv("REDIS_CRAWLER_PASSWORD")
+
+	addr := fmt.Sprintf("%s:%s", host, port)
 	client := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "!$bibleTumbSha256$!",
+		Addr:     addr,
+		Password: password,
 		DB:       0,
 	})
 
