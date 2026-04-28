@@ -9,6 +9,7 @@ import (
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/auth/register"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/me"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/search"
+	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/suggest"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/middleware"
 	authmw "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/auth"
 	loggermw "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/logger"
@@ -16,9 +17,10 @@ import (
 	requestidmw "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/requestid"
 	authService "github.com/koftamainee/search-engine/backend/internal/service/auth"
 	searchService "github.com/koftamainee/search-engine/backend/internal/service/search"
+	suggestService "github.com/koftamainee/search-engine/backend/internal/service/suggest"
 )
 
-func New(authService *authService.Service, searchService *searchService.Service) http.Handler {
+func New(authService *authService.Service, searchService *searchService.Service, suggestService *suggestService.Service) http.Handler {
 
 	mux := http.NewServeMux()
 
@@ -36,6 +38,7 @@ func New(authService *authService.Service, searchService *searchService.Service)
 	meFunc := middleware.Chain(me.New(), recoverer, requestid, logger, auth)
 
 	searchFunc := middleware.Chain(search.New(searchService), recoverer, requestid, logger, auth)
+	suggestFunc := middleware.Chain(suggest.New(suggestService), recoverer, requestid, logger, auth)
 
 	mux.HandleFunc("POST /v1/auth/register", registerFunc)
 	mux.HandleFunc("POST /v1/auth/login", loginFunc)
@@ -46,6 +49,7 @@ func New(authService *authService.Service, searchService *searchService.Service)
 	mux.HandleFunc("GET /v1/me", meFunc)
 
 	mux.HandleFunc("GET /v1/search", searchFunc)
+	mux.HandleFunc("GET /v1/suggest", suggestFunc)
 
 	return mux
 }
