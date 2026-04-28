@@ -96,7 +96,7 @@ func valueExistAndEqualKey(attr_map map[string]string, key, value string) bool {
 func normalizeUrl(rawURL string) string {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
-		return err.Error()
+		return ""
 	}
 	parsedURL.Fragment = ""
 	parsedURL.Host = strings.ToLower(parsedURL.Host)
@@ -140,17 +140,25 @@ func toAbsolute(base string, rawlink string) string {
 	return resolved.String()
 }
 
-func isValidLink(Url string, link string) (string, bool) {
+func isValidLink(baseURL string, link string) (string, bool) {
 
 	if link == "" || link == "#" {
 		return "", false
 	}
 
-	abs := toAbsolute(Url, link)
+	if strings.HasPrefix(link, "javascript:") ||
+		strings.HasPrefix(link, "mailto:") ||
+		strings.HasPrefix(link, "tel:") {
+		return "", false
+	}
+
+	abs := toAbsolute(baseURL, link)
+	if abs == "" {
+		return "", false
+	}
 
 	abs = normalizeUrl(abs)
-
-	if strings.HasPrefix(link, "javascript:") || strings.HasPrefix(link, "mailto:") || strings.HasPrefix(link, "tel:") {
+	if abs == "" {
 		return "", false
 	}
 
@@ -158,7 +166,9 @@ func isValidLink(Url string, link string) (string, bool) {
 		return "", false
 	}
 
-	isAllowByRobots(link, getDomain(link))
+	if !isAllowByRobots(abs, getDomain(abs)) {
+		return "", false
+	}
 
 	return abs, true
 }
@@ -255,22 +265,26 @@ func CacheByRobots(PageUrl string) {
 	}
 }
 
-func isAllowByRobots(link, linkDomain string) bool {
-	robots, ok := RobotsCache[linkDomain]
+func isAllowByRobots(rawURL string, domain string) bool {
+	robots, ok := RobotsCache[domain]
 	if !ok {
 		return true
 	}
 
-	if len(robots.DisallowPaths) == 0 {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
 		return true
 	}
 
-	_, ok2 := robots.DisallowPaths[link]
-	if !ok2 {
-		return true
+	path := parsed.Path
+
+	for disallowedPath := range robots.DisallowPaths {
+		if strings.HasPrefix(path, disallowedPath) {
+			return false
+		}
 	}
 
-	return false
+	return true
 }
 
 func extractData(r io.Reader) (CrawlerMessage, []string) {
@@ -309,12 +323,13 @@ func extractData(r io.Reader) (CrawlerMessage, []string) {
 
 			case "meta":
 				attr_map := attrToMap(tok.Attr)
+
 				if valueExistAndEqualKey(attr_map, "property", "og:description") {
 					message.Meta.Description = attr_map["content"]
-				} else if valueExistAndEqualKey(attr_map, "name", "description") && !valueExistAndEqualKey(attr_map, "property", "og:description") {
-					message.Meta.Description = attr_map["content"]
-				} else {
-					message.Meta.Description = ""
+				} else if valueExistAndEqualKey(attr_map, "name", "description") {
+					if message.Meta.Description == "" {
+						message.Meta.Description = attr_map["content"]
+					}
 				}
 
 			case "script", "noscript", "style":
@@ -407,7 +422,7 @@ func fetchPage(ctx context.Context, pageUrl string) (CrawlerMessage, []string, e
 				continue
 			}
 			if !isAlreadyAdded[normalizedLink] {
-				if getDomain(link) != getDomain(pageUrl) {
+				if getDomain(normalizedLink) != getDomain(pageUrl) {
 					externalLinks = append(externalLinks, normalizedLink)
 				} else {
 					internalLinks = append(internalLinks, normalizedLink)
@@ -469,6 +484,7 @@ func startCrawler(ctx context.Context, Url string) error {
 	return nil
 }
 
+// TODO: i don't now were yet, but handle multi-thread processing
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
