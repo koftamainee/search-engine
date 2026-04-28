@@ -8,10 +8,16 @@ const results = ref<any[]>([])
 const total = ref(0)
 const isLoading = ref(false)
 const errorMessage = ref("")
+const suggestions = ref<{ type: string; data: string }[]>([])
+const showSuggestions = ref(false)
+const selectedIndex = ref(-1)
+const isFocused = ref(false)
 
 const num = 10
 const offset = computed(() => Number(route.query.offset) || 0)
 const searchQuery = computed(() => (route.query.q as string) || "")
+
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 onMounted(async () => {
   try {
@@ -36,18 +42,46 @@ watch(() => route.query.offset, () => {
   performSearch()
 })
 
+watch(query, (val) => {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+  }
+  debounceTimer = setTimeout(() => {
+    fetchSuggestions(val)
+  }, 150)
+})
+
+async function fetchSuggestions(q: string) {
+  try {
+    const res = await $fetch<{
+      status: string
+      data: { query: string; suggestions: { type: string; data: string }[] }
+    }>(`/api/v1/suggest?q=${encodeURIComponent(q)}&num=10`)
+
+    suggestions.value = res.data.suggestions ?? []
+
+    if (isFocused.value) {
+      showSuggestions.value = suggestions.value.length > 0
+    }
+    selectedIndex.value = -1
+  } catch {
+    suggestions.value = []
+    showSuggestions.value = false
+  }
+}
+
 async function performSearch() {
   if (!query.value.trim()) return
   isLoading.value = true
   errorMessage.value = ""
+  showSuggestions.value = false
   try {
     const data = await $fetch<{
       query: string
       hits: { id: string; score: number; data: any }[]
       num: number
       total: number
-      start: number
-      next_start?: number
+      offset: number
     }>("/api/v1/search", {
       params: {
         q: query.value,
@@ -65,8 +99,42 @@ async function performSearch() {
   }
 }
 
+function selectSuggestion(suggestion: { type: string; data: string }) {
+  query.value = suggestion.data
+  newSearch()
+}
+
 function newSearch() {
+  if (!query.value.trim()) return
+  showSuggestions.value = false
   router.push({ path: "/search", query: { q: query.value, num, offset: 0 } })
+}
+
+function onKeyDown(e: KeyboardEvent) {
+  if (!showSuggestions.value) return
+
+  if (e.key === "ArrowDown") {
+    e.preventDefault()
+    selectedIndex.value = Math.min(selectedIndex.value + 1, suggestions.value.length - 1)
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault()
+    selectedIndex.value = Math.max(selectedIndex.value - 1, -1)
+  } else if (e.key === "Enter" && selectedIndex.value >= 0) {
+    e.preventDefault()
+    selectSuggestion(suggestions.value[selectedIndex.value]!)
+  }
+}
+
+function onFocus() {
+  isFocused.value = true
+  fetchSuggestions(query.value)
+}
+
+function onBlur() {
+  isFocused.value = false
+  setTimeout(() => {
+    showSuggestions.value = false
+  }, 200)
 }
 
 function prevPage() {
@@ -96,18 +164,43 @@ function nextPage() {
         <h1 class="site-title">
           <NuxtLink to="/">Search engine</NuxtLink>
         </h1>
-        <div class="search-bar">
-          <input
-            v-model="query"
-            placeholder="Search..."
-            @keyup.enter="newSearch"
-          />
-          <button @click="newSearch">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-          </button>
+        <div class="search-container">
+          <div class="search-bar">
+            <input
+              v-model="query"
+              placeholder="Search..."
+              @keyup.enter="newSearch"
+              @keydown="onKeyDown"
+              @focus="onFocus"
+              @blur="onBlur"
+            />
+            <button @click="newSearch">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+            </button>
+          </div>
+          
+          <div v-if="showSuggestions" class="suggestions-dropdown">
+            <div
+              v-for="(suggestion, index) in suggestions"
+              :key="index"
+              class="suggestion-item"
+              :class="{ selected: index === selectedIndex }"
+              @mousedown.prevent="selectSuggestion(suggestion)"
+            >
+              <svg v-if="suggestion.type === 'history'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="suggestion-icon">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="suggestion-icon">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <span>{{ suggestion.data }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -193,9 +286,13 @@ function nextPage() {
   color: #646cff;
 }
 
+.search-container {
+  position: relative;
+  flex: 1;
+}
+
 .search-bar {
   display: flex;
-  flex: 1;
   border: 1px solid rgba(128, 128, 128, 0.3);
   border-radius: 24px;
   overflow: hidden;
@@ -230,6 +327,39 @@ function nextPage() {
 
 .search-bar button:hover {
   color: #646cff;
+}
+
+.suggestions-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 8px;
+  background: var(--bg, #fff);
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 12px;
+  overflow: hidden;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.suggestion-item:hover,
+.suggestion-item.selected {
+  background-color: rgba(128, 128, 128, 0.1);
+}
+
+.suggestion-icon {
+  flex-shrink: 0;
+  opacity: 0.6;
 }
 
 .error {

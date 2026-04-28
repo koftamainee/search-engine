@@ -1,10 +1,20 @@
 <script setup lang="ts">
-const { register } = useAuth()
+const { register, me } = useAuth()
 
 const email = ref("")
 const password = ref("")
 const errorMessage = ref("")
 const isLoading = ref(false)
+const isCheckingAuth = ref(true)
+
+onMounted(async () => {
+  try {
+    await me()
+    navigateTo("/")
+  } catch {
+    isCheckingAuth.value = false
+  }
+})
 
 async function onRegister() {
   errorMessage.value = ""
@@ -32,7 +42,11 @@ function clearError() {
 </script>
 
 <template>
-  <div class="page">
+  <div v-if="isCheckingAuth" class="page">
+    <p>Checking authentication...</p>
+  </div>
+
+  <div v-else class="page">
     <h1>Register</h1>
 
     <div v-if="errorMessage" class="error-message">

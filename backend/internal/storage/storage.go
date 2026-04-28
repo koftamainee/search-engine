@@ -32,8 +32,8 @@ type BookmarkStorage interface {
 }
 
 type HistoryStorage interface {
-	Create(ctx context.Context, bookmark *domain.SearchHistory) error
-	GetByUserID(ctx context.Context, userID uuid.UUID) (*[]domain.SearchHistory, error)
+	Create(ctx context.Context, query *domain.SearchHistory) error
+	GetByUserID(ctx context.Context, userID uuid.UUID, num int, offset int) (*[]domain.SearchHistory, error)
 	Delete(ctx context.Context, id uuid.UUID, userID uuid.UUID) error
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/koftamainee/search-engine/backend/internal/http-server/router"
 	"github.com/koftamainee/search-engine/backend/internal/service/auth"
 	"github.com/koftamainee/search-engine/backend/internal/service/search"
+	"github.com/koftamainee/search-engine/backend/internal/service/suggest"
 	"github.com/koftamainee/search-engine/backend/internal/storage/postgres"
 	"github.com/koftamainee/search-engine/backend/internal/storage/redis"
 	"github.com/meilisearch/meilisearch-go"
@@ -74,12 +75,14 @@ func main() {
 	meiliIndex := meiliClient.Index(cfg.Meilisearch.Index)
 
 	userStorage := postgres.NewUserStorage(pgPool)
+	historyStorage := postgres.NewHistoryStorage(pgPool)
 	sessionStorage := redis.NewSessionStorage(redisClient)
 
 	authService := auth.New(userStorage, sessionStorage, cfg.Env == "prod")
-	searchService := search.New(meiliIndex)
+	searchService := search.New(meiliIndex, historyStorage)
+	suggestService := suggest.New(meiliIndex, historyStorage)
 
-	r := router.New(authService, searchService)
+	r := router.New(authService, searchService, suggestService)
 
 	log.Printf("starting server on %s", cfg.HTTPServer.Address)
 	err = http.ListenAndServe(cfg.HTTPServer.Address, r)
