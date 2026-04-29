@@ -3,8 +3,10 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/md5"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/go-redis/redis"
 	"io"
 	"log"
 	"net/http"
@@ -13,8 +15,13 @@ import (
 	"os/signal"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
+
+	"github.com/redis/go-redis/v9"
+
+	"github.com/meilisearch/meilisearch-go"
 
 	"golang.org/x/net/html"
 )
@@ -51,8 +58,6 @@ func isUnwantedURL(rawURL string) bool {
 		"Special:",
 		"Справка:",
 		"Help:",
-		"Википедия:",
-		"Wikipedia:",
 		"Портал:",
 		"Portal:",
 		"Шаблон:",
@@ -61,8 +66,6 @@ func isUnwantedURL(rawURL string) bool {
 		"Category:",
 		"Файл:",
 		"File:",
-		"Обсуждение:",
-		"Talk:",
 	}
 
 	lowerURL := strings.ToLower(rawURL)
@@ -73,9 +76,6 @@ func isUnwantedURL(rawURL string) bool {
 	}
 	return false
 }
-
-// TODO: make redis cache here
-var RobotsCache = make(map[string]*RobotsTxt)
 
 func attrToMap(arr_attr []html.Attribute) map[string]string {
 	map_attr := make(map[string]string, len(arr_attr))
@@ -115,6 +115,9 @@ func normalizeText(text string) string {
 	text = regexp.MustCompile(`\s+`).ReplaceAllString(text, " ")
 	text = strings.TrimSpace(text)
 
+	if len(text) > 5000 {
+		text = text[:5000]
+	}
 	return text
 }
 
@@ -141,7 +144,7 @@ func toAbsolute(base string, rawlink string) string {
 	return resolved.String()
 }
 
-func isValidLink(baseURL string, link string) (string, bool) {
+func isValidLink(ctx context.Context, rdb *redis.Client, baseURL string, link string) (string, bool) {
 
 	if link == "" || link == "#" {
 		return "", false
@@ -167,7 +170,8 @@ func isValidLink(baseURL string, link string) (string, bool) {
 		return "", false
 	}
 
-	if !isAllowByRobots(abs, getDomain(abs)) {
+	allowed, _ := isAllowByRobots(ctx, rdb, abs, getDomain(abs))
+	if !allowed {
 		return "", false
 	}
 
@@ -184,10 +188,39 @@ func getDomain(rawURL string) string {
 	return host
 }
 
-func fetchRobotsTxt(pageUrl string) (RobotsTxt, error) {
+const robotsCachePrefix = "robots:"
+const robotsCacheTTL = 96 * time.Hour
+
+// returns [ nil, nil ] if not in cache
+func getRobotsFromCache(ctx context.Context, rdb *redis.Client, domain string) (*RobotsTxt, error) {
+	val, err := rdb.Get(ctx, robotsCachePrefix+domain).Result()
+	if err == redis.Nil {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("redis get error: %w", err)
+	}
+
+	var robots RobotsTxt
+	if err := json.Unmarshal([]byte(val), &robots); err != nil {
+		return nil, fmt.Errorf("unmarshal error: %w", err)
+	}
+	return &robots, nil
+}
+
+func setRobotsToCache(ctx context.Context, rdb *redis.Client, robots *RobotsTxt) error {
+	data, err := json.Marshal(robots)
+	if err != nil {
+		return fmt.Errorf("marshal error: %w", err)
+	}
+
+	return rdb.Set(ctx, robotsCachePrefix+robots.PageDomain, data, robotsCacheTTL).Err()
+}
+
+func fetchRobotsTxt(ctx context.Context, rdb *redis.Client, pageUrl string) (*RobotsTxt, error) {
 	parsedURL, err := url.Parse(pageUrl)
 	if err != nil {
-		return RobotsTxt{}, fmt.Errorf("failed to parse URL: %w", err)
+		return nil, fmt.Errorf("failed to parse URL: %w", err)
 	}
 
 	robotTxtRef := fmt.Sprintf("%s://%s/robots.txt", parsedURL.Scheme, parsedURL.Host)
@@ -198,15 +231,38 @@ func fetchRobotsTxt(pageUrl string) (RobotsTxt, error) {
 
 	resp, err := client.Get(robotTxtRef)
 	if err != nil {
-		return RobotsTxt{}, nil
+		return nil, fmt.Errorf("failed to fetch robots.txt: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		return RobotsTxt{}, nil
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
+		robots := &RobotsTxt{
+			PageDomain:    parsedURL.Host,
+			DisallowPaths: make(map[string]bool),
+		}
+		if err := setRobotsToCache(ctx, rdb, robots); err != nil {
+			log.Printf("failed to cache empty robots.txt for %s: %v", parsedURL.Host, err)
+		}
+		return robots, nil
 	}
 
-	robots := RobotsTxt{
+	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+		log.Printf("robots.txt for %s returned %d, treating as full disallow", parsedURL.Host, resp.StatusCode)
+		robots := &RobotsTxt{
+			PageDomain:    parsedURL.Host,
+			DisallowPaths: map[string]bool{"/": true},
+		}
+		if err := setRobotsToCache(ctx, rdb, robots); err != nil {
+			log.Printf("failed to cache full-disallow robots.txt for %s: %v", parsedURL.Host, err)
+		}
+		return robots, nil
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code %d for robots.txt", resp.StatusCode)
+	}
+
+	robots := &RobotsTxt{
 		PageDomain:    parsedURL.Host,
 		DisallowPaths: make(map[string]bool),
 	}
@@ -225,7 +281,8 @@ func fetchRobotsTxt(pageUrl string) (RobotsTxt, error) {
 
 		if strings.HasPrefix(lowerLine, "user-agent:") {
 			agent := strings.TrimSpace(line[len("user-agent:"):])
-			isRelevantUserAgent = (agent == "*" || agent == "search-engine")
+			agentLower := strings.ToLower(agent)
+			isRelevantUserAgent = (agentLower == "*" || agentLower == "skwajer's_searchenginecrawler/1.0")
 			continue
 		}
 
@@ -243,49 +300,60 @@ func fetchRobotsTxt(pageUrl string) (RobotsTxt, error) {
 			if path != "" {
 				delete(robots.DisallowPaths, path)
 			}
-		} else if strings.HasPrefix(lowerLine, "crawl-delay:") {
-			continue
-		} else if strings.HasPrefix(lowerLine, "sitemap:") {
-			continue
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return RobotsTxt{}, fmt.Errorf("error reading robots.txt: %w", err)
+		return nil, fmt.Errorf("error reading robots.txt: %w", err)
 	}
 
-	RobotsCache[parsedURL.Host] = &robots
+	if err := setRobotsToCache(ctx, rdb, robots); err != nil {
+		log.Printf("failed to cache robots.txt for %s: %v", parsedURL.Host, err)
+	}
+
 	return robots, nil
 }
 
-func CacheByRobots(PageUrl string) {
-	domain := getDomain(PageUrl)
-	_, ok := RobotsCache[domain]
-	if !ok {
-		fetchRobotsTxt(PageUrl)
+func CacheByRobots(ctx context.Context, rdb *redis.Client, pageUrl string) {
+	domain := getDomain(pageUrl)
+	robots, err := getRobotsFromCache(ctx, rdb, domain)
+	if err != nil {
+		log.Printf("error checking robots cache for %s: %v", domain, err)
+		return
+	}
+	if robots == nil {
+		_, err := fetchRobotsTxt(ctx, rdb, pageUrl)
+		if err != nil {
+			log.Printf("failed to fetch robots.txt for %s: %v", domain, err)
+		}
 	}
 }
 
-func isAllowByRobots(rawURL string, domain string) bool {
-	robots, ok := RobotsCache[domain]
-	if !ok {
-		return true
+func isAllowByRobots(ctx context.Context, rdb *redis.Client, rawURL string, domain string) (bool, error) {
+	robots, err := getRobotsFromCache(ctx, rdb, domain)
+	if err != nil {
+		return true, err
+	}
+
+	if robots == nil {
+
+		return true, nil
 	}
 
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return true
+		return true, nil
 	}
 
 	path := parsed.Path
 
 	for disallowedPath := range robots.DisallowPaths {
 		if strings.HasPrefix(path, disallowedPath) {
-			return false
+			return false, nil
 		}
 	}
 
-	return true
+	return true, nil
 }
 
 func extractData(r io.Reader) (CrawlerMessage, []string) {
@@ -368,7 +436,14 @@ func extractData(r io.Reader) (CrawlerMessage, []string) {
 	return message, next_links
 }
 
-func fetchPage(ctx context.Context, pageUrl string) (CrawlerMessage, []string, error) {
+func fetchPage(ctx context.Context, rdb *redis.Client, pageUrl string) (CrawlerMessage, []string, error) {
+	CacheByRobots(ctx, rdb, pageUrl)
+
+	allowed, _ := isAllowByRobots(ctx, rdb, pageUrl, getDomain(pageUrl))
+	if !allowed {
+		log.Printf("%s is disallowed by robots.txt", pageUrl)
+		return CrawlerMessage{}, nil, errors.New("page is disallowed by robots.txt")
+	}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", pageUrl, nil)
 	if err != nil {
@@ -389,8 +464,6 @@ func fetchPage(ctx context.Context, pageUrl string) (CrawlerMessage, []string, e
 	}
 	defer resp.Body.Close()
 
-	CacheByRobots(pageUrl)
-
 	log.Printf("Page returned status code: %d", resp.StatusCode)
 	message := CrawlerMessage{
 		Url: pageUrl,
@@ -398,6 +471,7 @@ func fetchPage(ctx context.Context, pageUrl string) (CrawlerMessage, []string, e
 			Status_code: resp.StatusCode,
 		},
 	}
+
 	extractedData, next_links := extractData(resp.Body)
 	message.Text = extractedData.Text
 	message.Meta.Title = extractedData.Meta.Title
@@ -405,87 +479,168 @@ func fetchPage(ctx context.Context, pageUrl string) (CrawlerMessage, []string, e
 	message.Meta.Timestamp = extractedData.Meta.Timestamp
 
 	var validLinks []string
-	var externalLinks []string
-	var internalLinks []string
-
 	isAlreadyAdded := make(map[string]bool)
 	isAlreadyAdded[pageUrl] = true
-	for _, link := range next_links {
 
+	for _, link := range next_links {
 		select {
 		case <-ctx.Done():
 			return message, validLinks, ctx.Err()
 		default:
 		}
 
-		if normalizedLink, ok := isValidLink(pageUrl, link); ok {
+		if normalizedLink, ok := isValidLink(ctx, rdb, pageUrl, link); ok {
 			if isUnwantedURL(normalizedLink) {
 				continue
 			}
 			if !isAlreadyAdded[normalizedLink] {
-				if getDomain(normalizedLink) != getDomain(pageUrl) {
-					externalLinks = append(externalLinks, normalizedLink)
-				} else {
-					internalLinks = append(internalLinks, normalizedLink)
-				}
+				validLinks = append(validLinks, normalizedLink)
 				isAlreadyAdded[normalizedLink] = true
 			}
 		}
-	}
-	validLinks = append(validLinks, externalLinks...)
-	validLinks = append(validLinks, internalLinks...)
-
-	select {
-	case <-time.After(200 * time.Millisecond):
-	case <-ctx.Done():
-		return message, validLinks, ctx.Err()
 	}
 
 	return message, validLinks, nil
 }
 
-func startCrawler(ctx context.Context, Url string) error {
-	linkQueue := []string{normalizeUrl(Url)}
-	visited := make(map[string]bool)
-
-	for i := 0; i < len(linkQueue); i++ {
-
-		if ctx.Err() != nil {
-			log.Printf("Crawler stopped: %v", ctx.Err())
-			return ctx.Err()
-		}
-
-		url := linkQueue[i]
-
-		if !visited[url] {
-			message, nextLinks, err := fetchPage(ctx, url)
-			if err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				log.Printf("fetch page error: url = %s, err = %v", url, err)
-				continue
-			}
-			fmt.Printf("🌐 URL: %s\n", message.Url)
-			fmt.Printf("📝 Title: %s\n", message.Meta.Title)
-			fmt.Printf("📊 Status: %d\n", message.Meta.Status_code)
-			fmt.Printf("⏰ Time: %s\n", message.Meta.Timestamp)
-			//fmt.Printf("📄 Text: %s\n", message.Text)
-
-			visited[url] = true
-			for l := 0; l < len(nextLinks); l++ {
-				if !visited[nextLinks[l]] {
-					linkQueue = append(linkQueue, nextLinks[l])
-				}
-			}
-		}
+func startCrawler(ctx context.Context, rdb *redis.Client, meiliIndex meilisearch.IndexManager, startUrl string) error {
+	normalized := normalizeUrl(startUrl)
+	added, err := rdb.SAdd(ctx, "visited", normalized).Result()
+	if err != nil {
+		return errors.New("Page already crawled")
+	}
+	if added != 0 {
+		rdb.LPush(ctx, "queue", normalized)
 	}
 
-	log.Printf("The page with url = %s is fully crawled", Url)
-	return nil
+	const numWorkers = 25
+
+	urlChan := make(chan string, 100)
+	var wg sync.WaitGroup
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					log.Printf("[worker %d] shutting down...", workerID)
+					return
+				case url, ok := <-urlChan:
+					if !ok {
+						return
+					}
+
+					reqCtx, cancelReq := context.WithTimeout(ctx, 10*time.Second)
+					message, nextLinks, err := fetchPage(reqCtx, rdb, url)
+					cancelReq()
+
+					if err != nil {
+						if ctx.Err() != nil {
+							return
+						}
+						log.Printf("[worker %d] fetch error: url=%s err=%v", workerID, url, err)
+						continue
+					}
+
+					fmt.Printf("[worker %d] 🌐 URL: %s\n", workerID, message.Url)
+					fmt.Printf("[worker %d] 📝 Title: %s\n", workerID, message.Meta.Title)
+					fmt.Printf("[worker %d] 📊 Status: %d\n", workerID, message.Meta.Status_code)
+
+					jsonData, err := json.Marshal(message)
+					if err != nil {
+						log.Printf("[worker %d] failed to marshal: %v", workerID, err)
+						continue
+					}
+					rdb.LPush(ctx, "crawled_pages", jsonData)
+
+					id := fmt.Sprintf("%x", md5.Sum([]byte(message.Url)))
+
+					if message.Meta.Status_code == 200 {
+						docs := []map[string]interface{}{
+							{
+								"id":          id,
+								"url":         message.Url,
+								"title":       message.Meta.Title,
+								"description": message.Meta.Description,
+								"text":        message.Text,
+								"timestamp":   message.Meta.Timestamp,
+							},
+						}
+						task, err := meiliIndex.AddDocuments(docs, nil)
+						if err != nil {
+							log.Printf("[worker %d] Meilisearch index error: %v", workerID, err)
+							continue
+						}
+						fmt.Printf("[worker %d] 📑 Indexed to Meilisearch (task: %d)\n", workerID, task.TaskUID)
+					}
+
+					for _, nextLink := range nextLinks {
+						select {
+						case <-ctx.Done():
+							return
+						default:
+						}
+
+						norm := normalizeUrl(nextLink)
+						added, err := rdb.SAdd(ctx, "visited", norm).Result()
+						if err != nil {
+							continue
+						}
+						if added != 0 {
+							rdb.LPush(ctx, "queue", norm)
+						}
+					}
+				}
+			}
+		}(i)
+	}
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
+			url, err := rdb.RPop(ctx, "queue").Result()
+			if err == redis.Nil {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(300 * time.Millisecond):
+					continue
+				}
+			}
+			if err != nil {
+				log.Printf("Error reading from queue: %v", err)
+				return
+			}
+
+			select {
+			case <-ctx.Done():
+				rdb.LPush(ctx, "queue", url)
+				return
+			case urlChan <- url:
+			}
+		}
+	}()
+
+	<-ctx.Done()
+
+	log.Println("Shutting down crawler...")
+
+	close(urlChan)
+
+	wg.Wait()
+
+	log.Println("All workers stopped")
+	return ctx.Err()
+
 }
 
-// TODO: i don't now were yet, but handle multi-thread processing
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -504,20 +659,38 @@ func main() {
 	password := os.Getenv("REDIS_CRAWLER_PASSWORD")
 
 	addr := fmt.Sprintf("%s:%s", host, port)
-	client := redis.NewClient(&redis.Options{
+	rdb := redis.NewClient(&redis.Options{
 		Addr:     addr,
 		Password: password,
 		DB:       0,
 	})
 
-	err := client.Ping().Err()
+	err := rdb.Ping(ctx).Err()
 	if err != nil {
 		fmt.Println("Redis is not working:", err)
 		return
 	}
 	fmt.Println("Redis is working.")
 
-	if err := startCrawler(ctx, "https://en.wikipedia.org/wiki/Main_Page"); err != nil {
+	// Meilisearch initialization
+	meiliHost := os.Getenv("MEILI_HOST")
+	meiliPort := os.Getenv("MEILI_PORT")
+	meiliMasterKey := os.Getenv("MEILI_MASTER_KEY")
+
+	meiliURL := fmt.Sprintf("http://%s:%s", meiliHost, meiliPort)
+	meiliClient := meilisearch.New(meiliURL, meilisearch.WithAPIKey(meiliMasterKey))
+
+	_, err = meiliClient.Health()
+	if err != nil {
+		fmt.Printf("Meilisearch connection error: %v\n", err)
+		return
+	}
+	fmt.Println("Meilisearch is working.")
+	fmt.Printf("Meilisearch URL: %s\n", meiliURL)
+
+	meiliIndex := meiliClient.Index("web_pages")
+
+	if err := startCrawler(ctx, rdb, meiliIndex, "https://example.com"); err != nil {
 		if err == context.Canceled {
 			log.Println("Crawler stopped by user")
 		} else {
