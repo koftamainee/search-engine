@@ -51,6 +51,8 @@ services:
       meilisearch:
         condition: service_healthy
     restart: unless-stopped
+    ports:
+      - 8081:8081
 
   frontend:
     image: ghcr.io/${GITHUB_REPOSITORY}/frontend:${IMAGE_TAG:-latest}
