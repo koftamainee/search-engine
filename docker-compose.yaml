@@ -34,7 +34,7 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY}/crawler:${IMAGE_TAG:-latest}
     environment:
       - REDIS_CRAWLER_HOST=${REDIS_CRAWLER_HOST}
-      - REDIS_PORT=${REDIS_CRAWLER_PORT}
+      - REDIS_CRAWLER_PORT=${REDIS_CRAWLER_PORT}
       - REDIS_CRAWLER_PASSWORD=${REDIS_CRAWLER_PASSWORD}
       - MEILI_HOST=${MEILI_HOST}
       - MEILI_PORT=${MEILI_PORT}
@@ -99,7 +99,7 @@ services:
     volumes:
       - redis_crawler_data:/data
       - ./db/redis/redis-crawler.conf:/usr/local/etc/redis/redis_crawler.conf
-    command: [ "redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${REDIS_CRAWLER_PASSWORD}" ]
+    command: [ "redis-server", "/usr/local/etc/redis/redis_crawler.conf", "--requirepass", "${REDIS_CRAWLER_PASSWORD}" ]
     healthcheck:
       test: [ "CMD-SHELL", "redis-cli -a ${REDIS_CRAWLER_PASSWORD} ping" ]
       interval: 10s
