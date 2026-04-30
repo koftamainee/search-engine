@@ -102,6 +102,15 @@ func normalizeUrl(rawURL string) string {
 	parsedURL.Fragment = ""
 	parsedURL.Host = strings.ToLower(parsedURL.Host)
 	parsedURL.Host = strings.TrimPrefix(parsedURL.Host, "www.")
+
+	if parsedURL.Scheme == "http" {
+		parsedURL.Scheme = "https"
+	}
+
+	parsedURL.Path = strings.TrimSuffix(parsedURL.Path, "/")
+	if parsedURL.Path == "" {
+		parsedURL.Path = "/"
+	}
 	return parsedURL.String()
 }
 
@@ -548,13 +557,6 @@ func startCrawler(ctx context.Context, rdb *redis.Client, meiliIndex meilisearch
 					fmt.Printf("[worker %d] 📝 Title: %s\n", workerID, message.Meta.Title)
 					fmt.Printf("[worker %d] 📊 Status: %d\n", workerID, message.Meta.Status_code)
 
-					jsonData, err := json.Marshal(message)
-					if err != nil {
-						log.Printf("[worker %d] failed to marshal: %v", workerID, err)
-						continue
-					}
-					rdb.LPush(ctx, "crawled_pages", jsonData)
-
 					id := fmt.Sprintf("%x", md5.Sum([]byte(message.Url)))
 
 					if message.Meta.Status_code == 200 {
@@ -675,7 +677,7 @@ func main() {
 
 	//redis initialization
 	host := os.Getenv("REDIS_CRAWLER_HOST")
-	port := os.Getenv("REDIS_PORT")
+	port := os.Getenv("REDIS_CRAWLER_PORT")
 	password := os.Getenv("REDIS_CRAWLER_PASSWORD")
 
 	addr := fmt.Sprintf("%s:%s", host, port)
