@@ -6,15 +6,6 @@ type SearchRequest struct {
 	Offset int    `json:"offset"`
 }
 
-type MeilisearchResponse struct {
-	ID          string `json:"id"`
-	URL         string `json:"url"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Text        string `json:"text"`
-	Timestamp   string `json:"timestamp"`
-}
-
 type SearchResult struct {
 	ID          string `json:"id"`
 	URL         string `json:"url"`
