@@ -11,7 +11,7 @@ services:
     build:
       context: crawler
       dockerfile: Dockerfile
-      target: development
+#      target: development
 
   frontend:
     image: ""
