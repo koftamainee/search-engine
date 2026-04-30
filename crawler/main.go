@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -697,6 +698,18 @@ func main() {
 	meiliPort := os.Getenv("MEILI_PORT")
 	meiliMasterKey := os.Getenv("MEILI_MASTER_KEY")
 
+	numWorkers := -1
+	if w := os.Getenv("CRAWLER_NUM_WORKERS"); w != "" {
+		if v, err := strconv.Atoi(w); err == nil {
+			numWorkers = v
+		}
+	}
+
+	if numWorkers == -1 {
+		log.Println("WARN: CRAWLER_NUM_WORKERS is undefined or NaN. Using default value: 5")
+		numWorkers = 5
+	}
+
 	meiliURL := fmt.Sprintf("http://%s:%s", meiliHost, meiliPort)
 	meiliClient := meilisearch.New(meiliURL, meilisearch.WithAPIKey(meiliMasterKey))
 
@@ -709,8 +722,6 @@ func main() {
 	fmt.Printf("Meilisearch URL: %s\n", meiliURL)
 
 	meiliIndex := meiliClient.Index("web_pages")
-
-	numWorkers := 5
 
 	if err := startCrawler(ctx, rdb, meiliIndex, "https://example.com", numWorkers); err != nil {
 		if err == context.Canceled {

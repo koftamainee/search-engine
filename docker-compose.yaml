@@ -39,6 +39,7 @@ services:
       - MEILI_HOST=${MEILI_HOST}
       - MEILI_PORT=${MEILI_PORT}
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+      - CRAWLER_NUM_WORKERS=5
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1" ]
       interval: 10s
