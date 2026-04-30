@@ -10,16 +10,15 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_PORT=${POSTGRES_PORT}
-      - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_HOST=${REDIS_BACKEND_HOST}
+      - REDIS_PORT=${REDIS_BACKEND_PORT}
+      - REDIS_PASSWORD=${REDIS_BACKEND_PASSWORD}
       - MEILI_HOST=${MEILI_HOST}
       - MEILI_PORT=${MEILI_PORT}
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
-
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q --server-response http://localhost:8080/v1/health || exit 1"]
+      test: [ "CMD-SHELL", "wget --spider -q --server-response http://localhost:8080/v1/health || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,22 +31,25 @@ services:
         condition: service_healthy
 
   crawler:
-    image: ghcr.io/${GITHUB_REPOSITORY}/backend:${IMAGE_TAG:-latest}
+    image: ghcr.io/${GITHUB_REPOSITORY}/crawler:${IMAGE_TAG:-latest}
     environment:
-      - REDIS_CRAWLER_HOST=redis-crawler
-      - REDIS_PORT=6379
-      - REDIS_CRAWLER_PASSWORD=
-      - MEILI_MASTER_KEY=meilikey
-      - MEILI_HOST=meilisearch
-      - MEILI_PORT=7700
+      - REDIS_CRAWLER_HOST=${REDIS_CRAWLER_HOST}
+      - REDIS_PORT=${REDIS_CRAWLER_PORT}
+      - REDIS_CRAWLER_PASSWORD=${REDIS_CRAWLER_PASSWORD}
+      - MEILI_HOST=${MEILI_HOST}
+      - MEILI_PORT=${MEILI_PORT}
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+    healthcheck:
+      test: [ "CMD-SHELL",  "exit 0" ]     # TODO: add /health endpoint and wget it here
+      interval: 10s
+      timeout: 5s
+      retries: 5
     depends_on:
       redis-crawler:
         condition: service_healthy
       meilisearch:
         condition: service_healthy
     restart: unless-stopped
-
-
 
   frontend:
     image: ghcr.io/${GITHUB_REPOSITORY}/frontend:${IMAGE_TAG:-latest}
@@ -57,7 +59,7 @@ services:
     depends_on:
       - backend
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ > /dev/null || exit 1"]
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3000/ > /dev/null || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -84,13 +86,9 @@ services:
     volumes:
       - redis_data:/data
       - ./db/redis/redis.conf:/usr/local/etc/redis/redis.conf
-    environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-    command: [ "redis-server", "/usr/local/etc/redis/redis.conf" ]
-    ports:
-      - "6378:6379"
+    command: [ "redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${REDIS_BACKEND_PASSWORD}" ]
     healthcheck:
-      test: [ "CMD-SHELL", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
+      test: [ "CMD-SHELL", "redis-cli -a ${REDIS_BACKEND_PASSWORD} ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -100,10 +98,9 @@ services:
     restart: unless-stopped
     volumes:
       - redis_crawler_data:/data
-    environment:
-      - REDIS_CRAWLER_PASSWORD=${REDIS_CRAWLER_PASSWORD}
+    command: [ "redis-server", "--requirepass", "${REDIS_CRAWLER_PASSWORD}" ] # TODO: add redis config
     healthcheck:
-      test: [ "CMD-SHELL", "redis-cli", "-a", "${REDIS_CRAWLER_PASSWORD}", "ping" ]
+      test: [ "CMD-SHELL", "redis-cli -a ${REDIS_CRAWLER_PASSWORD} ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -117,10 +114,8 @@ services:
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     volumes:
       - meili_data:/meili_data
-    ports:
-      - "127.0.0.1:7700:7700"
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:7700/health || exit 1"]
+      test: [ "CMD-SHELL", "curl -f http://localhost:7700/health || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
