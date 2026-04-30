@@ -86,7 +86,7 @@ Response:
 
 ### Start crawling
 
-# url="" - error
+url="" - error
 
 ```bash
 GET /start?url=https://example.com
