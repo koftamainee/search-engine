@@ -710,7 +710,7 @@ func main() {
 
 	meiliIndex := meiliClient.Index("web_pages")
 
-	numWorkers := 15
+	numWorkers := 5
 
 	if err := startCrawler(ctx, rdb, meiliIndex, "https://example.com", numWorkers); err != nil {
 		if err == context.Canceled {
