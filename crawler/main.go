@@ -653,6 +653,26 @@ func main() {
 		cancel()
 	}()
 
+	//health check endpoint
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"ok"}`))
+		})
+
+		server := &http.Server{
+			Addr:    ":8081",
+			Handler: mux,
+		}
+		log.Println("Health check server listening on :8081")
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Health server error: %v", err)
+		}
+
+	}()
+
 	//redis initialization
 	host := os.Getenv("REDIS_CRAWLER_HOST")
 	port := os.Getenv("REDIS_PORT")
