@@ -11,7 +11,7 @@
   "meilisearch": {
     "url": "http://${MEILI_HOST}:${MEILI_PORT}",
     "api_key": "${MEILI_MASTER_KEY}",
-    "index": "pages"
+    "index": "web_pages"
   },
   "redis": {
     "address": "redis-backend:6379",

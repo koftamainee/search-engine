@@ -19,6 +19,35 @@ const searchQuery = computed(() => (route.query.q as string) || "")
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
+// Типы для ответов
+interface SearchHit {
+  id: string
+  url: string
+  title: string
+  description: string
+}
+
+interface SearchResponseData {
+  query: string
+  hits: SearchHit[]
+  total: number
+  num: number
+  offset: number
+}
+
+interface SearchApiResponse {
+  status: string
+  data: SearchResponseData
+}
+
+interface SuggestionApiResponse {
+  status: string
+  data: {
+    query: string
+    suggestions: { type: string; data: string }[]
+  }
+}
+
 onMounted(async () => {
   try {
     await me()
@@ -43,9 +72,7 @@ watch(() => route.query.offset, () => {
 })
 
 watch(query, (val) => {
-  if (debounceTimer) {
-    clearTimeout(debounceTimer)
-  }
+  if (debounceTimer) clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => {
     fetchSuggestions(val)
   }, 150)
@@ -53,13 +80,10 @@ watch(query, (val) => {
 
 async function fetchSuggestions(q: string) {
   try {
-    const res = await $fetch<{
-      status: string
-      data: { query: string; suggestions: { type: string; data: string }[] }
-    }>(`/api/v1/suggest?q=${encodeURIComponent(q)}&num=10`)
-
-    suggestions.value = res.data.suggestions ?? []
-
+    const res = await $fetch<SuggestionApiResponse>(
+      `/api/v1/suggest?q=${encodeURIComponent(q)}&num=10`
+    )
+    suggestions.value = res.data?.suggestions ?? []
     if (isFocused.value) {
       showSuggestions.value = suggestions.value.length > 0
     }
@@ -75,24 +99,26 @@ async function performSearch() {
   isLoading.value = true
   errorMessage.value = ""
   showSuggestions.value = false
+
   try {
-    const data = await $fetch<{
-      query: string
-      hits: { id: string; score: number; data: any }[]
-      num: number
-      total: number
-      offset: number
-    }>("/api/v1/search", {
+    const apiResponse = await $fetch<SearchApiResponse>("/api/v1/search", {
       params: {
         q: query.value,
         num,
         offset: offset.value,
       },
     })
-    results.value = data.hits || []
-    total.value = data.total || 0
+
+    // Проверяем, что статус успешный
+    if (apiResponse.status !== "ok" || !apiResponse.data) {
+      throw new Error("Server returned an error status")
+    }
+
+    const responseData = apiResponse.data
+    results.value = responseData.hits || []
+    total.value = responseData.total || 0
   } catch (e: any) {
-    errorMessage.value = "Search failed. Please try again."
+    errorMessage.value = e?.message || "Search failed. Please try again."
     results.value = []
   } finally {
     isLoading.value = false
@@ -112,7 +138,6 @@ function newSearch() {
 
 function onKeyDown(e: KeyboardEvent) {
   if (!showSuggestions.value) return
-
   if (e.key === "ArrowDown") {
     e.preventDefault()
     selectedIndex.value = Math.min(selectedIndex.value + 1, suggestions.value.length - 1)
@@ -181,7 +206,7 @@ function nextPage() {
               </svg>
             </button>
           </div>
-          
+
           <div v-if="showSuggestions" class="suggestions-dropdown">
             <div
               v-for="(suggestion, index) in suggestions"
@@ -211,10 +236,11 @@ function nextPage() {
       <div v-else-if="results.length" class="results">
         <p class="count">About {{ total }} results (showing {{ offset + 1 }}–{{ Math.min(offset + num, total) }})</p>
         <ul>
+          <!-- Изменено: используем поля верхнего уровня -->
           <li v-for="item in results" :key="item.id" class="result-item">
-            <a :href="item.data.url" target="_blank" class="title">{{ item.data.title }}</a>
-            <cite class="url">{{ item.data.url }}</cite>
-            <p class="snippet">{{ item.data.snippet }}</p>
+            <a :href="item.url" target="_blank" class="title">{{ item.title }}</a>
+            <cite class="url">{{ item.url }}</cite>
+            <p class="snippet">{{ item.description }}</p>
           </li>
         </ul>
         <div class="pagination">
@@ -229,6 +255,7 @@ function nextPage() {
 </template>
 
 <style scoped>
+/* стили без изменений */
 .wrapper {
   position: relative;
   min-height: 100vh;

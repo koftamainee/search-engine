@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"strings"
@@ -70,7 +71,28 @@ func (s *Service) Search(ctx context.Context, request domain.SearchRequest) (dom
 
 	hits := make([]domain.SearchResult, 0, len(res.Hits))
 
-	// TODO: write results to hits
+	for _, h := range res.Hits {
+		b, err := json.Marshal(h)
+		if err != nil {
+			log.Printf("failed to marshal search result: %v", err)
+			continue
+		}
+
+		var item domain.MeilisearchResponse
+		if err := json.Unmarshal(b, &item); err != nil {
+			log.Printf("failed to unmarshal search result: %v", err)
+			continue
+		}
+
+		var translated domain.SearchResult
+
+		translated.ID = item.ID
+		translated.URL = item.URL
+		translated.Title = item.Title
+		translated.Description = item.Description
+
+		hits = append(hits, translated)
+	}
 
 	result = domain.SearchResponse{
 		Query: request.Query,

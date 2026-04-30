@@ -2,7 +2,9 @@ package suggest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"log"
 
 	"github.com/koftamainee/search-engine/backend/internal/domain"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/middleware/auth"
@@ -70,11 +72,26 @@ func (s *Service) Suggest(ctx context.Context, request domain.SuggestRequest) (d
 
 	suggestions := make([]domain.Suggest, 0, len(res.Hits))
 
-	// TODO: write results to suggestions
-	suggestions = append(suggestions, domain.Suggest{Type: "query", Data: "Golang tutorial free without SMS"})
-	suggestions = append(suggestions, domain.Suggest{Type: "query", Data: "Cox, Little, O'Shea ch2"})
-	suggestions = append(suggestions, domain.Suggest{Type: "query", Data: "RECONSTRUCT WHAT"})
-	suggestions = append(suggestions, domain.Suggest{Type: "query", Data: "random hardcoded data"})
+	for _, h := range res.Hits {
+		b, err := json.Marshal(h)
+		if err != nil {
+			log.Printf("failed to marshal search result: %v", err)
+			continue
+		}
+
+		var item domain.MeilisearchResponse
+		if err := json.Unmarshal(b, &item); err != nil {
+			log.Printf("failed to unmarshal search result: %v", err)
+			continue
+		}
+
+		var translated domain.Suggest
+
+		translated.Type = "query"
+		translated.Data = item.Title
+
+		suggestions = append(suggestions, translated)
+	}
 
 	return domain.SuggestResponse{
 		Query:       request.Query,

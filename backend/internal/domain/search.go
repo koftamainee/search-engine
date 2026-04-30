@@ -7,9 +7,10 @@ type SearchRequest struct {
 }
 
 type SearchResult struct {
-	ID    string  `json:"id"`
-	Score float64 `json:"score"`
-	Data  any     `json:"data"`
+	ID          string `json:"id"`
+	URL         string `json:"url"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
 }
 
 type SearchResponse struct {
