@@ -514,41 +514,15 @@ func fetchPage(ctx context.Context, rdb *redis.Client, pageUrl string) (CrawlerM
 
 func startCrawler(ctx context.Context, rdb *redis.Client, meiliIndex meilisearch.IndexManager, startUrl string, numWorkers int) error {
 	normalized := normalizeUrl(startUrl)
-	now := time.Now().Unix()
-
-	added, err := rdb.ZAddNX(ctx, "visited", redis.Z{
-		Score:  float64(now),
-		Member: normalized,
-	}).Result()
+	added, err := rdb.SAdd(ctx, "visited", normalized).Result()
 	if err != nil {
-		return fmt.Errorf("redis ZAddNX error: %w", err)
+		return errors.New("Page already crawled")
 	}
 	if added != 0 {
 		rdb.LPush(ctx, "queue", normalized)
 	}
 
-	//TTL simulation
-	go func() {
-		ticker := time.NewTicker(12 * time.Hour)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				thirtyDaysAgo := time.Now().Add(-30 * 24 * time.Hour).Unix()
-				deleted, err := rdb.ZRemRangeByScore(ctx, "visited", "0", fmt.Sprintf("%d", thirtyDaysAgo)).Result()
-				if err != nil {
-					log.Printf("Error cleaning old visited URLs: %v", err)
-				} else if deleted > 0 {
-					log.Printf("Cleaned %d visited URLs older than 30 days", deleted)
-				}
-			}
-		}
-	}()
-
-	urlChan := make(chan string, numWorkers*4)
+	urlChan := make(chan string, 100)
 	var wg sync.WaitGroup
 
 	for i := 0; i < numWorkers; i++ {
@@ -610,12 +584,7 @@ func startCrawler(ctx context.Context, rdb *redis.Client, meiliIndex meilisearch
 						}
 
 						norm := normalizeUrl(nextLink)
-						now := time.Now().Unix()
-
-						added, err := rdb.ZAddNX(ctx, "visited", redis.Z{
-							Score:  float64(now),
-							Member: norm,
-						}).Result()
+						added, err := rdb.SAdd(ctx, "visited", norm).Result()
 						if err != nil {
 							continue
 						}
@@ -669,6 +638,7 @@ func startCrawler(ctx context.Context, rdb *redis.Client, meiliIndex meilisearch
 
 	log.Println("All workers stopped")
 	return ctx.Err()
+
 }
 
 func main() {
