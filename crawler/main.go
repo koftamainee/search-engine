@@ -715,12 +715,26 @@ func main() {
 
 		mux := http.NewServeMux()
 		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				w.Write([]byte(`{"error":"only GET method is allowed"}`))
+				return
+			}
+
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`{"status":"ok"}`))
 		})
 
 		mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				w.Write([]byte(`{"error":"only GET method is allowed"}`))
+				return
+			}
+
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintf(w, `{"running":%v}`, isRunning)
@@ -734,6 +748,13 @@ func main() {
 				return
 			}
 
+			if r.Method != http.MethodPost {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				w.Write([]byte(`{"error":"only POST method is allowed"}`))
+				return
+			}
+
 			url := r.URL.Query().Get("url")
 			if url == "" {
 				w.WriteHeader(http.StatusBadRequest)
@@ -742,13 +763,18 @@ func main() {
 			}
 
 			isRunning = true
-			if err := startCrawler(ctx, rdb, meiliIndex, url, numWorkers); err != nil {
-				if err == context.Canceled {
-					log.Println("Crawler stopped by user")
-				} else {
-					log.Printf("Crawler error: %v", err)
+			go func() {
+				if err := startCrawler(ctx, rdb, meiliIndex, url, numWorkers); err != nil {
+					if err == context.Canceled {
+						log.Println("Crawler stopped by user")
+					} else {
+						log.Printf("Crawler error: %v", err)
+					}
 				}
-			}
+			}()
+			w.Header().Set("Content-Type", "aplication/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"crawler crawling:)"}`))
 		})
 
 		mux.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
@@ -756,6 +782,13 @@ func main() {
 				w.Header().Set("Content-Type", "aplication/json")
 				w.WriteHeader(http.StatusExpectationFailed)
 				w.Write([]byte(`{"error":"crawler already stopped"}`))
+				return
+			}
+
+			if r.Method != http.MethodPost {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				w.Write([]byte(`{"error":"only POST method is allowed"}`))
 				return
 			}
 
