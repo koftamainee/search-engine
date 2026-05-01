@@ -705,10 +705,13 @@ func main() {
 	meiliIndex := meiliClient.Index("web_pages")
 
 	//crawler managment endpoint
-	var isCrawlerRunning = false
+	var (
+		isRunning   bool               = false
+		cancelFunc  context.CancelFunc = cancel
+		crawlerAddr string             = fmt.Sprintf(":%s", os.Getenv("CRAWLER_PORT"))
+	)
 
-	go func() {
-		ctx, cancel := context.WithCancel(context.Background())
+	go func(ctx context.Context) {
 
 		mux := http.NewServeMux()
 		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -720,11 +723,11 @@ func main() {
 		mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, `{"running":%v}`, isCrawlerRunning)
+			fmt.Fprintf(w, `{"running":%v}`, isRunning)
 		})
 
 		mux.HandleFunc("/start", func(w http.ResponseWriter, r *http.Request) {
-			if isCrawlerRunning {
+			if isRunning {
 				w.Header().Set("Content-Type", "aplication/json")
 				w.WriteHeader(http.StatusExpectationFailed)
 				w.Write([]byte(`{"error":"crawler already running"}`))
@@ -738,7 +741,7 @@ func main() {
 				return
 			}
 
-			isCrawlerRunning = true
+			isRunning = true
 			if err := startCrawler(ctx, rdb, meiliIndex, url, numWorkers); err != nil {
 				if err == context.Canceled {
 					log.Println("Crawler stopped by user")
@@ -749,28 +752,26 @@ func main() {
 		})
 
 		mux.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
-			if !isCrawlerRunning {
+			if !isRunning {
 				w.Header().Set("Content-Type", "aplication/json")
 				w.WriteHeader(http.StatusExpectationFailed)
 				w.Write([]byte(`{"error":"crawler already stopped"}`))
 				return
 			}
 
-			isCrawlerRunning = false
-			cancel()
+			isRunning = false
+			cancelFunc()
 		})
 
 		server := &http.Server{
-			Addr:    ":8081",
+			Addr:    crawlerAddr,
 			Handler: mux,
 		}
-		log.Println("Health check server listening on :8081")
+		log.Printf("Health check server listening on :%s", crawlerAddr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Printf("Health server error: %v", err)
 		}
+	}(ctx)
 
-		<-ctx.Done()
-
-	}()
 	<-ctx.Done()
 }
