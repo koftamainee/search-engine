@@ -13,7 +13,7 @@ WORKDIR /home/crawler
 COPY --from=builder /crawler .
 CMD ["./crawler"]
 
-EXPOSE 8080
+EXPOSE 32423
 
 # DEV stage
 #FROM golang:1.25.3-alpine AS development
