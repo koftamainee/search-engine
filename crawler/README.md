@@ -5,7 +5,7 @@
 ```env
 REDIS_CRAWLER_PASSWORD=pass
 REDIS_CRAWLER_HOST=redis-crawler
-REDIS_PORT=6379
+REDIS_CRAWLER_PORT=6379
 
 MEILI_MASTER_KEY=meilikey
 MEILI_HOST=meilisearch
@@ -86,7 +86,7 @@ Response:
 
 ### Start crawling
 
-# url="" - error
+url="" - error
 
 ```bash
 GET /start?url=https://example.com
