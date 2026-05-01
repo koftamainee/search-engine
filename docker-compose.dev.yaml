@@ -12,6 +12,8 @@ services:
       context: crawler
       dockerfile: Dockerfile
 #      target: development
+    ports:
+      - "32423:8080"
 
   frontend:
     image: ""

@@ -643,6 +643,7 @@ func startCrawler(ctx context.Context, rdb *redis.Client, meiliIndex meilisearch
 }
 
 func main() {
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -652,26 +653,6 @@ func main() {
 		<-sigChan
 		log.Println("Received interrupt signal. Shutting down...")
 		cancel()
-	}()
-
-	//health check endpoint
-	go func() {
-		mux := http.NewServeMux()
-		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"status":"ok"}`))
-		})
-
-		server := &http.Server{
-			Addr:    ":8081",
-			Handler: mux,
-		}
-		log.Println("Health check server listening on :8081")
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("Health server error: %v", err)
-		}
-
 	}()
 
 	//redis initialization
@@ -723,11 +704,107 @@ func main() {
 
 	meiliIndex := meiliClient.Index("web_pages")
 
-	if err := startCrawler(ctx, rdb, meiliIndex, "https://example.com", numWorkers); err != nil {
-		if err == context.Canceled {
-			log.Println("Crawler stopped by user")
-		} else {
-			log.Printf("Crawler error: %v", err)
+	//crawler managment endpoint
+	var (
+		isRunning   bool               = false
+		cancelFunc  context.CancelFunc = cancel
+		crawlerAddr string             = fmt.Sprintf(":%s", os.Getenv("CRAWLER_PORT"))
+	)
+
+	go func(ctx context.Context) {
+
+		mux := http.NewServeMux()
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				w.Write([]byte(`{"error":"only GET method is allowed"}`))
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"ok"}`))
+		})
+
+		mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				w.Write([]byte(`{"error":"only GET method is allowed"}`))
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, `{"running":%v}`, isRunning)
+		})
+
+		mux.HandleFunc("/start", func(w http.ResponseWriter, r *http.Request) {
+			if isRunning {
+				w.Header().Set("Content-Type", "aplication/json")
+				w.WriteHeader(http.StatusExpectationFailed)
+				w.Write([]byte(`{"error":"crawler already running"}`))
+				return
+			}
+
+			if r.Method != http.MethodPost {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				w.Write([]byte(`{"error":"only POST method is allowed"}`))
+				return
+			}
+
+			url := r.URL.Query().Get("url")
+			if url == "" {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(`{"error":"url parameter is required"}`))
+				return
+			}
+
+			isRunning = true
+			go func() {
+				if err := startCrawler(ctx, rdb, meiliIndex, url, numWorkers); err != nil {
+					if err == context.Canceled {
+						log.Println("Crawler stopped by user")
+					} else {
+						log.Printf("Crawler error: %v", err)
+					}
+				}
+			}()
+			w.Header().Set("Content-Type", "aplication/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status":"crawler crawling:)"}`))
+		})
+
+		mux.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
+			if !isRunning {
+				w.Header().Set("Content-Type", "aplication/json")
+				w.WriteHeader(http.StatusExpectationFailed)
+				w.Write([]byte(`{"error":"crawler already stopped"}`))
+				return
+			}
+
+			if r.Method != http.MethodPost {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusMethodNotAllowed)
+				w.Write([]byte(`{"error":"only POST method is allowed"}`))
+				return
+			}
+
+			isRunning = false
+			cancelFunc()
+		})
+
+		server := &http.Server{
+			Addr:    crawlerAddr,
+			Handler: mux,
 		}
-	}
+		log.Printf("Health check server listening on :%s", crawlerAddr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Health server error: %v", err)
+		}
+	}(ctx)
+
+	<-ctx.Done()
 }
