@@ -1,8 +1,14 @@
 package router
 
 import (
+	"log/slog"
 	"net/http"
 
+	"github.com/koftamainee/search-engine-common/pkg/middleware"
+	logctxmw "github.com/koftamainee/search-engine-common/pkg/middleware/logctx"
+	loggermw "github.com/koftamainee/search-engine-common/pkg/middleware/logger"
+	recoverermv "github.com/koftamainee/search-engine-common/pkg/middleware/recoverer"
+	requestidmw "github.com/koftamainee/search-engine-common/pkg/middleware/requestid"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/auth/health"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/auth/login"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/auth/logout"
@@ -10,35 +16,32 @@ import (
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/me"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/search"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/handlers/suggest"
-	"github.com/koftamainee/search-engine/backend/internal/http-server/middleware"
 	authmw "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/auth"
-	loggermw "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/logger"
-	recoverermv "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/recoverer"
-	requestidmw "github.com/koftamainee/search-engine/backend/internal/http-server/middleware/requestid"
 	authService "github.com/koftamainee/search-engine/backend/internal/service/auth"
 	searchService "github.com/koftamainee/search-engine/backend/internal/service/search"
 	suggestService "github.com/koftamainee/search-engine/backend/internal/service/suggest"
 )
 
-func New(authService *authService.Service, searchService *searchService.Service, suggestService *suggestService.Service) http.Handler {
+func New(log *slog.Logger, authService *authService.Service, searchService *searchService.Service, suggestService *suggestService.Service) http.Handler {
 
 	mux := http.NewServeMux()
 
 	recoverer := recoverermv.Middleware()
 	requestid := requestidmw.Middleware()
+	logctx := logctxmw.Middleware(log)
 	logger := loggermw.Middleware()
 	auth := authmw.Middleware(authService)
 
-	registerFunc := middleware.Chain(register.New(authService), recoverer, requestid, logger)
-	loginFunc := middleware.Chain(login.New(authService), recoverer, requestid, logger)
-	logoutFunc := middleware.Chain(logout.New(authService), recoverer, requestid, logger, auth)
+	registerFunc := middleware.Chain(register.New(authService), recoverer, logctx, requestid, logger)
+	loginFunc := middleware.Chain(login.New(authService), recoverer, logctx, requestid, logger)
+	logoutFunc := middleware.Chain(logout.New(authService), recoverer, logctx, requestid, logger, auth)
 
-	healthFunc := middleware.Chain(health.New(), recoverer, requestid, logger)
+	healthFunc := middleware.Chain(health.New(), recoverer, logctx, requestid, logger)
 
-	meFunc := middleware.Chain(me.New(), recoverer, requestid, logger, auth)
+	meFunc := middleware.Chain(me.New(), recoverer, logctx, requestid, logger, auth)
 
-	searchFunc := middleware.Chain(search.New(searchService), recoverer, requestid, logger, auth)
-	suggestFunc := middleware.Chain(suggest.New(suggestService), recoverer, requestid, logger, auth)
+	searchFunc := middleware.Chain(search.New(searchService), recoverer, logctx, requestid, logger, auth)
+	suggestFunc := middleware.Chain(suggest.New(suggestService), recoverer, logctx, requestid, logger, auth)
 
 	mux.HandleFunc("POST /v1/auth/register", registerFunc)
 	mux.HandleFunc("POST /v1/auth/login", loginFunc)

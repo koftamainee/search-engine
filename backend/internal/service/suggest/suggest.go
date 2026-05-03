@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 
+	"github.com/koftamainee/search-engine-common/pkg/logger"
 	"github.com/koftamainee/search-engine/backend/internal/domain"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/middleware/auth"
 	"github.com/koftamainee/search-engine/backend/internal/storage"
@@ -31,6 +31,8 @@ func (s *Service) Suggest(ctx context.Context, request domain.SuggestRequest) (d
 	if limit <= 0 || limit > 50 {
 		return domain.SuggestResponse{}, ErrInvalidLimit
 	}
+
+	log := logger.FromContext(ctx)
 
 	if request.Query == "" {
 		userVal := ctx.Value(auth.UserContextKey)
@@ -75,13 +77,13 @@ func (s *Service) Suggest(ctx context.Context, request domain.SuggestRequest) (d
 	for _, h := range res.Hits {
 		b, err := json.Marshal(h)
 		if err != nil {
-			log.Printf("failed to marshal search result: %v", err)
+			log.Error("failed to marshal search result: %v", err)
 			continue
 		}
 
 		var item domain.MeilisearchResponse
 		if err := json.Unmarshal(b, &item); err != nil {
-			log.Printf("failed to unmarshal search result: %v", err)
+			log.Error("failed to unmarshal search result: %v", err)
 			continue
 		}
 

@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/koftamainee/search-engine-common/pkg/logger"
 	"github.com/koftamainee/search-engine/backend/internal/config"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/router"
 	"github.com/koftamainee/search-engine/backend/internal/service/auth"
@@ -21,6 +23,18 @@ import (
 
 func main() {
 	cfg := config.MustLoad()
+
+	logCfg := logger.Config{
+		Level:     slog.LevelInfo,
+		JSON:      cfg.Env == "prod",
+		AddSource: false,
+		Color:     cfg.Env != "prod",
+	}
+
+	log := logger.New(logCfg)
+	logger.SetDefault(log)
+
+	log.Info("Starting backend service")
 
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.HTTPServer.Timeout)
 	defer cancel()
@@ -37,7 +51,6 @@ func main() {
 			return err
 		})
 	})
-	defer pgPool.Close()
 
 	var meiliClient meilisearch.ServiceManager
 	wg.Go(func() error {
@@ -50,27 +63,26 @@ func main() {
 	})
 
 	var redisClient *redissdk.Client
-
 	wg.Go(func() error {
 		return connect(ctx, connectionAttempts, cfg.HTTPServer.Timeout, func() error {
 			var err error
-			redisClient, err = redis.New(ctx, cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.DB)
+			redisClient, err = redis.New(ctx, cfg.SessionStorage.Address, cfg.SessionStorage.Password, cfg.SessionStorage.DB)
 			return err
 		})
 	})
 
 	err := wg.Wait()
 	if err != nil {
-		log.Fatalf("initialization failed: %v", err)
+		log.Error("initialization failed", "error", err)
+		os.Exit(1)
 	}
 
 	defer pgPool.Close()
-	defer func(redisClient *redissdk.Client) {
-		err := redisClient.Close()
-		if err != nil {
-			log.Printf("failed to close redis connection")
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			log.Warn("failed to close redis connection", "error", err)
 		}
-	}(redisClient)
+	}()
 
 	meiliIndex := meiliClient.Index(cfg.Meilisearch.Index)
 
@@ -82,12 +94,14 @@ func main() {
 	searchService := search.New(meiliIndex, historyStorage)
 	suggestService := suggest.New(meiliIndex, historyStorage)
 
-	r := router.New(authService, searchService, suggestService)
+	r := router.New(log, authService, searchService, suggestService)
 
-	log.Printf("starting server on %s", cfg.HTTPServer.Address)
+	log.Info("starting server", "addr", cfg.HTTPServer.Address)
+
 	err = http.ListenAndServe(cfg.HTTPServer.Address, r)
 	if err != nil {
-		log.Fatalf("server error: %v", err)
+		log.Error("server error", "error", err)
+		os.Exit(1)
 	}
 }
 

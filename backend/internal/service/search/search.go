@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/koftamainee/search-engine-common/pkg/logger"
 	"github.com/koftamainee/search-engine/backend/internal/domain"
 	"github.com/koftamainee/search-engine/backend/internal/http-server/middleware/auth"
 	"github.com/koftamainee/search-engine/backend/internal/storage"
@@ -34,6 +34,8 @@ func New(index meilisearch.IndexManager, historyStorage storage.HistoryStorage) 
 func (s *Service) Search(ctx context.Context, request domain.SearchRequest) (domain.SearchResponse, error) {
 	var result domain.SearchResponse
 
+	log := logger.FromContext(ctx)
+
 	if len(request.Query) == 0 {
 		return domain.SearchResponse{}, ErrEmptyQuery
 	}
@@ -56,7 +58,7 @@ func (s *Service) Search(ctx context.Context, request domain.SearchRequest) (dom
 
 			err := s.historyStorage.Create(ctx, &entry)
 			if err != nil {
-				log.Printf("failed to save search history: %v", err)
+				log.Error("failed to save search history: %v", err)
 			}
 		}
 	}
@@ -74,13 +76,13 @@ func (s *Service) Search(ctx context.Context, request domain.SearchRequest) (dom
 	for _, h := range res.Hits {
 		b, err := json.Marshal(h)
 		if err != nil {
-			log.Printf("failed to marshal search result: %v", err)
+			log.Error("failed to marshal search result: %v", err)
 			continue
 		}
 
 		var item domain.MeilisearchResponse
 		if err := json.Unmarshal(b, &item); err != nil {
-			log.Printf("failed to unmarshal search result: %v", err)
+			log.Error("failed to unmarshal search result: %v", err)
 			continue
 		}
 
