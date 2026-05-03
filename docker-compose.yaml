@@ -39,7 +39,8 @@ services:
     ports:
       - "127.0.0.1:${FRONTEND_TARGET_PORT}:${FRONTEND_PORT}"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:${FRONTEND_PORT}/ || exit 1"]
       interval: 10s
@@ -56,7 +57,7 @@ services:
       - MEILI_HOST=${MEILI_HOST}
       - MEILI_PORT=${MEILI_PORT}
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
-      - CRAWLER_NUM_WORKERS=5
+      - CRAWLER_NUM_WORKERS=${CRAWLER_NUM_WORKERS}
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:${CRAWLER_PORT}/health || exit 1"]
       interval: 10s
@@ -175,7 +176,8 @@ services:
     restart: unless-stopped
     volumes:
       - feature_storage_data:/data
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${FEATURE_STORAGE_PASSWORD}"]
+      - ./db/redis/feature_storage.conf:/usr/local/etc/redis/redis.conf
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${FEATURE_STORAGE_PASSWORD}"]
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -h 127.0.0.1 -a ${FEATURE_STORAGE_PASSWORD} ping"]
       interval: 10s
