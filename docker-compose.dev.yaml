@@ -21,6 +21,12 @@ services:
     ports:
       - "80"
 
+  metrics-service:
+    image: ""
+    build: ./metrics-service
+    environment:
+      - RUST_LOG=trace
+
   reverse_proxy:
     image: nginx:alpine
     ports:

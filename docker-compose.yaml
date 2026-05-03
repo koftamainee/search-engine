@@ -29,6 +29,8 @@ services:
         condition: service_healthy
       meilisearch:
         condition: service_healthy
+      feature-storage:
+        condition: service_healthy
 
   frontend:
     image: ghcr.io/${GITHUB_REPOSITORY}/frontend:${IMAGE_TAG:-latest}
@@ -68,6 +70,28 @@ services:
       message-broker:
         condition: service_healthy
     restart: unless-stopped
+
+  metrics-service:
+    image: ghcr.io/${GITHUB_REPOSITORY}/metrics-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      - METRICS_SERVICE_PORT=${METRICS_SERVICE_PORT}
+      - MESSAGE_BROKER_HOST=${MESSAGE_BROKER_HOST}
+      - MESSAGE_BROKER_PORT=${MESSAGE_BROKER_PORT}
+      - FEATURE_STORAGE_HOST=${FEATURE_STORAGE_HOST}
+      - FEATURE_STORAGE_PORT=${FEATURE_STORAGE_PORT}
+      - FEATURE_STORAGE_PASSWORD=${FEATURE_STORAGE_PASSWORD}
+      - RUST_LOG=${RUST_LOG}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${METRICS_SERVICE_PORT}/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      message-broker:
+        condition: service_healthy
+      feature-storage:
+        condition: service_healthy
 
   message-broker:
     image: nats:2.14-alpine
