@@ -656,9 +656,9 @@ func main() {
 	}()
 
 	//redis initialization
-	host := os.Getenv("CRAWL_STATE_HOST")
-	port := os.Getenv("CRAWL_STATE_PORT")
-	password := os.Getenv("CRAWL_STATE_PASSWORD")
+	host := os.Getenv("CRAWLER_STATE_HOST")
+	port := os.Getenv("CRAWLER_STATE_PORT")
+	password := os.Getenv("CRAWLER_STATE_PASSWORD")
 
 	addr := fmt.Sprintf("%s:%s", host, port)
 	rdb := redis.NewClient(&redis.Options{

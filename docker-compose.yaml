@@ -50,9 +50,9 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY}/crawler:${IMAGE_TAG:-latest}
     environment:
       - CRAWLER_PORT=${CRAWLER_PORT}
-      - CRAWL_STATE_HOST=${CRAWL_STATE_HOST}
-      - CRAWL_STATE_PORT=${CRAWL_STATE_PORT}
-      - CRAWL_STATE_PASSWORD=${CRAWL_STATE_PASSWORD}
+      - CRAWLER_STATE_HOST=${CRAWLER_STATE_HOST}
+      - CRAWLER_STATE_PORT=${CRAWLER_STATE_PORT}
+      - CRAWLER_STATE_PASSWORD=${CRAWLER_STATE_PASSWORD}
       - MEILI_HOST=${MEILI_HOST}
       - MEILI_PORT=${MEILI_PORT}
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
@@ -163,9 +163,9 @@ services:
     volumes:
       - crawler_state_data:/data
       - ./db/redis/crawler_state.conf:/usr/local/etc/redis/redis.conf
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${CRAWL_STATE_PASSWORD}"]
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${CRAWLER_STATE_PASSWORD}"]
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -h 127.0.0.1 -a ${CRAWL_STATE_PASSWORD} ping"]
+      test: ["CMD-SHELL", "redis-cli -h 127.0.0.1 -a ${CRAWLER_STATE_PASSWORD} ping"]
       interval: 10s
       timeout: 5s
       retries: 5
