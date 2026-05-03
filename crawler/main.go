@@ -708,7 +708,7 @@ func main() {
 	var (
 		isRunning   bool               = false
 		cancelFunc  context.CancelFunc = cancel
-		crawlerAddr string             = fmt.Sprintf(":%s", os.Getenv("CRAWLER_PORT"))
+		crawlerAddr string             = fmt.Sprintf("0.0.0.0:%s", os.Getenv("CRAWLER_PORT"))
 	)
 
 	go func(ctx context.Context) {
@@ -800,7 +800,7 @@ func main() {
 			Addr:    crawlerAddr,
 			Handler: mux,
 		}
-		log.Printf("Health check server listening on :%s", crawlerAddr)
+		log.Printf("Health check server listening on %s", crawlerAddr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Printf("Health server error: %v", err)
 		}

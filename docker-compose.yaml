@@ -2,23 +2,24 @@ services:
   backend:
     image: ghcr.io/${GITHUB_REPOSITORY}/backend:${IMAGE_TAG:-latest}
     ports:
-      - "127.0.0.1:8083:8080"
+      - "127.0.0.1:${BACKEND_TARGET_PORT}:${BACKEND_PORT}"
     environment:
       - CONFIG_PATH=config/prod.json
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - SESSION_STORAGE_HOST=session-storage
-      - SESSION_STORAGE_PORT=6379
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - SESSION_STORAGE_HOST=${SESSION_STORAGE_HOST}
+      - SESSION_STORAGE_PORT=${SESSION_STORAGE_PORT}
       - SESSION_STORAGE_PASSWORD=${SESSION_STORAGE_PASSWORD}
-      - MEILI_HOST=meilisearch
-      - MEILI_PORT=7700
+      - MEILI_HOST=${MEILI_HOST}
+      - MEILI_PORT=${MEILI_PORT}
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+      - BACKEND_PORT=${BACKEND_PORT}
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "wget --spider -q --server-response http://localhost:8080/v1/health || exit 1" ]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:${BACKEND_PORT}/v1/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -36,11 +37,11 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY}/frontend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8084:3000"
+      - "127.0.0.1:${FRONTEND_TARGET_PORT}:${FRONTEND_PORT}"
     depends_on:
       - backend
     healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:3000/ > /dev/null || exit 1" ]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:${FRONTEND_PORT}/ || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -48,17 +49,16 @@ services:
   crawler:
     image: ghcr.io/${GITHUB_REPOSITORY}/crawler:${IMAGE_TAG:-latest}
     environment:
-      - CRAWLER_HOST=0.0.0.0
-      - CRAWLER_PORT=8080
-      - CRAWL_STATE_HOST=crawler-state
-      - CRAWL_STATE_PORT=6379
+      - CRAWLER_PORT=${CRAWLER_PORT}
+      - CRAWL_STATE_HOST=${CRAWL_STATE_HOST}
+      - CRAWL_STATE_PORT=${CRAWL_STATE_PORT}
       - CRAWL_STATE_PASSWORD=${CRAWL_STATE_PASSWORD}
-      - MEILI_HOST=meilisearch
-      - MEILI_PORT=7700
+      - MEILI_HOST=${MEILI_HOST}
+      - MEILI_PORT=${MEILI_PORT}
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
       - CRAWLER_NUM_WORKERS=5
     healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1" ]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:${CRAWLER_PORT}/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -83,7 +83,7 @@ services:
       - FEATURE_STORAGE_PASSWORD=${FEATURE_STORAGE_PASSWORD}
       - RUST_LOG=${RUST_LOG}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${METRICS_SERVICE_PORT}/health || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:${METRICS_SERVICE_PORT}/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -93,6 +93,28 @@ services:
       feature-storage:
         condition: service_healthy
 
+  graphdb-indexer:
+    image: ghcr.io/${GITHUB_REPOSITORY}/graphdb-indexer:${IMAGE_TAG:-latest}
+    environment:
+      - GRAPHDB_INDEXER_PORT=${GRAPHDB_INDEXER_PORT}
+      - GRAPHDB_PASSWORD=${GRAPHDB_PASSWORD}
+      - GRAPHDB_HOST=${GRAPHDB_HOST}
+      - GRAPHDB_PORT=${GRAPHDB_PORT}
+      - FEATURE_STORAGE_PASSWORD=${FEATURE_STORAGE_PASSWORD}
+      - FEATURE_STORAGE_HOST=${FEATURE_STORAGE_HOST}
+      - FEATURE_STORAGE_PORT=${FEATURE_STORAGE_PORT}
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:${GRAPHDB_INDEXER_PORT}/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      feature-storage:
+        condition: service_healthy
+      graphdb:
+        condition: service_healthy
+    restart: unless-stopped
+
   message-broker:
     image: nats:2.14-alpine
     restart: unless-stopped
@@ -101,7 +123,7 @@ services:
       - message_broker_data:/data
       - ./nats/nats_server.conf:/etc/nats/nats_server.conf
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8222/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -117,7 +139,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./db/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h 127.0.0.1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -128,9 +150,9 @@ services:
     volumes:
       - session_storage_data:/data
       - ./db/redis/session_storage.conf:/usr/local/etc/redis/redis.conf
-    command: [ "redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${SESSION_STORAGE_PASSWORD}" ]
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${SESSION_STORAGE_PASSWORD}"]
     healthcheck:
-      test: [ "CMD-SHELL", "redis-cli -a ${SESSION_STORAGE_PASSWORD} ping" ]
+      test: ["CMD-SHELL", "redis-cli -h 127.0.0.1 -a ${SESSION_STORAGE_PASSWORD} ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -141,9 +163,9 @@ services:
     volumes:
       - crawler_state_data:/data
       - ./db/redis/crawler_state.conf:/usr/local/etc/redis/redis.conf
-    command: [ "redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${CRAWL_STATE_PASSWORD}" ]
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${CRAWL_STATE_PASSWORD}"]
     healthcheck:
-      test: [ "CMD-SHELL", "redis-cli -a ${CRAWL_STATE_PASSWORD} ping" ]
+      test: ["CMD-SHELL", "redis-cli -h 127.0.0.1 -a ${CRAWL_STATE_PASSWORD} ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -153,9 +175,9 @@ services:
     restart: unless-stopped
     volumes:
       - feature_storage_data:/data
-    command: [ "redis-server", "--appendonly", "yes", "--requirepass", "${FEATURE_STORAGE_PASSWORD}" ]
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${FEATURE_STORAGE_PASSWORD}"]
     healthcheck:
-      test: [ "CMD-SHELL", "redis-cli -a ${FEATURE_STORAGE_PASSWORD} ping" ]
+      test: ["CMD-SHELL", "redis-cli -h 127.0.0.1 -a ${FEATURE_STORAGE_PASSWORD} ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -173,7 +195,7 @@ services:
       - graphdb_data:/data
       - graphdb_logs:/logs
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:7474 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -186,9 +208,9 @@ services:
       - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
     volumes:
       - meili_data:/meili_data
-    command: [ "meilisearch", "--max-indexing-memory", "1024" ]
+    command: ["meilisearch", "--max-indexing-memory", "1024"]
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:7700/health || exit 1" ]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:7700/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
