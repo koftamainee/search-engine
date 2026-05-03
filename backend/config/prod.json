@@ -13,9 +13,9 @@
     "api_key": "${MEILI_MASTER_KEY}",
     "index": "web_pages"
   },
-  "redis": {
-    "address": "${REDIS_HOST}:${REDIS_PORT}",
-    "password": "${REDIS_PASSWORD}",
+  "session_storage": {
+    "address": "${SESSION_STORAGE_HOST}:${SESSION_STORAGE_PORT}",
+    "password": "${SESSION_STORAGE_PASSWORD}",
     "DB": 0
   }
 }

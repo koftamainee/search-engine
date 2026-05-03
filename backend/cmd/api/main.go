@@ -54,7 +54,7 @@ func main() {
 	wg.Go(func() error {
 		return connect(ctx, connectionAttempts, cfg.HTTPServer.Timeout, func() error {
 			var err error
-			redisClient, err = redis.New(ctx, cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.DB)
+			redisClient, err = redis.New(ctx, cfg.SessionStorage.Address, cfg.SessionStorage.Password, cfg.SessionStorage.DB)
 			return err
 		})
 	})
