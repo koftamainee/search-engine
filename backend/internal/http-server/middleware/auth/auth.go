@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/koftamainee/search-engine/backend/internal/http-server/middleware"
+	"github.com/koftamainee/search-engine-common/pkg/middleware"
 	"github.com/koftamainee/search-engine/backend/internal/lib/api/response"
 	libtoken "github.com/koftamainee/search-engine/backend/internal/lib/api/token"
 	"github.com/koftamainee/search-engine/backend/internal/service/auth"
