@@ -104,6 +104,8 @@ services:
       - FEATURE_STORAGE_PASSWORD=${FEATURE_STORAGE_PASSWORD}
       - FEATURE_STORAGE_HOST=${FEATURE_STORAGE_HOST}
       - FEATURE_STORAGE_PORT=${FEATURE_STORAGE_PORT}
+      - MESSAGE_BROKER_HOST=${MESSAGE_BROKER_HOST}
+      - MESSAGE_BROKER_PORT=${MESSAGE_BROKER_PORT}
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:${GRAPHDB_INDEXER_PORT}/health || exit 1"]
       interval: 10s
